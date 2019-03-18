@@ -1,3 +1,4 @@
+six
 tensorflow
 numpy
 opencv-python
