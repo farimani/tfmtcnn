@@ -25,7 +25,7 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import cv2
+# import cv2
 import numpy as np
 
 import tfmtcnn.datasets.constants as datasets_constants
@@ -39,13 +39,16 @@ class LFWLandmarkDataset(object):
 
     @classmethod
     def name(cls):
-        return (LFWLandmarkDataset.__name)
+        return LFWLandmarkDataset.__name
 
     @classmethod
     def minimum_face_size(cls):
-        return (LFWLandmarkDataset.__minimum_face_size)
+        return LFWLandmarkDataset.__minimum_face_size
 
     def __init__(self):
+        self._is_valid = False
+        self._data = {}
+        self._number_of_faces = 0
         self._clear()
 
     def _clear(self):
@@ -54,62 +57,52 @@ class LFWLandmarkDataset(object):
         self._number_of_faces = 0
 
     def is_valid(self):
-        return (self._is_valid)
+        return self._is_valid
 
     def data(self):
-        return (self._data)
+        return self._data
 
     def read(self, landmark_image_dir, landmark_file_name):
-
         self._clear()
+        if not os.path.isfile(landmark_file_name):
+            return False
 
-        if (not os.path.isfile(landmark_file_name)):
-            return (False)
-
-        images = []
-        bounding_boxes = []
-        landmarks = []
+        images, bounding_boxes, landmarks = [], [], []
         landmark_file = open(landmark_file_name, 'r')
-        while (True):
+        while True:
             line = landmark_file.readline().strip()
             landmark_data = line.split(' ')
-
             image_path = landmark_data[0]
-            if (not image_path):
+            if not image_path:
                 break
             else:
                 image_path = os.path.join(landmark_image_dir, landmark_data[0])
 
-            bounding_box = (landmark_data[1], landmark_data[3],
-                            landmark_data[2], landmark_data[4])
-            bounding_box = map(int, bounding_box)
-            image_width = bounding_box[2] - bounding_box[0]
+            bounding_box = (int(landmark_data[1]), int(landmark_data[3]), int(landmark_data[2]), int(landmark_data[4]))
+            # bounding_box = (landmark_data[1], landmark_data[3], landmark_data[2], landmark_data[4])
+            # bounding_box = map(int, bounding_box)
+            image_width = bounding_box[2] - bounding_box[0]     # MEF: TODO: Check if we need to add 1 here?
             image_height = bounding_box[3] - bounding_box[1]
-
             landmark = np.zeros((5, 2))
             for index in range(0, 5):
-                point = (float(landmark_data[5 + 2 * index]),
-                         float(landmark_data[5 + 2 * index + 1]))
+                point = (float(landmark_data[5 + 2 * index]), float(landmark_data[5 + 2 * index + 1]))
                 landmark[index] = point
 
-            if ((max(image_width, image_height) >=
-                 LFWLandmarkDataset.minimum_face_size()) and (image_width > 0)
-                    and (image_height > 0)):
+            if max(image_width, image_height) >= LFWLandmarkDataset.minimum_face_size() and \
+                    image_width > 0 and image_height > 0:
                 images.append(image_path)
                 bounding_boxes.append(BBox(bounding_box))
                 landmarks.append(landmark)
                 self._number_of_faces += 1
 
-        if (len(images)):
+        if len(images):
             self._data['images'] = images
             self._data['bboxes'] = bounding_boxes
             self._data['landmarks'] = landmarks
             self._data['number_of_faces'] = self._number_of_faces
-
             self._is_valid = True
-            print(self._number_of_faces, 'faces in ', len(images),
-                  'number of images for LFWLandmark dataset')
+            print(f"{self._number_of_faces} faces in {len(images)} images for LFWLandmark dataset")
         else:
             self._clear()
 
-        return (self.is_valid())
+        return self.is_valid()

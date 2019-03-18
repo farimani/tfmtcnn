@@ -25,9 +25,11 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import cv2
+# import cv2
 
 import tfmtcnn.datasets.constants as datasets_constants
+
+import mef
 
 
 class WIDERFaceDataset(object):
@@ -37,13 +39,16 @@ class WIDERFaceDataset(object):
 
     @classmethod
     def name(cls):
-        return (WIDERFaceDataset.__name)
+        return WIDERFaceDataset.__name
 
     @classmethod
     def minimum_face_size(cls):
-        return (WIDERFaceDataset.__minimum_face_size)
+        return WIDERFaceDataset.__minimum_face_size
 
     def __init__(self):
+        self._is_valid = False
+        self._data = {}
+        self._number_of_faces = 0
         self._clear()
 
     def _clear(self):
@@ -52,67 +57,73 @@ class WIDERFaceDataset(object):
         self._number_of_faces = 0
 
     def is_valid(self):
-        return (self._is_valid)
+        return self._is_valid
 
     def data(self):
-        return (self._data)
+        return self._data
 
     def number_of_faces(self):
-        return (self._number_of_faces)
+        return self._number_of_faces
 
     def read(self, annotation_image_dir, annotation_file_name):
-
         self._clear()
 
-        if (not os.path.isfile(annotation_file_name)):
-            return (False)
+        if not mef.isfile(annotation_file_name):
+            return False
 
         images = []
         bounding_boxes = []
         annotation_file = open(annotation_file_name, 'r')
-        while (True):
+
+        mef.tsprint(f"Reading images in annotation file {annotation_file_name}...")
+        pt = mef.ProgressText(mef.get_line_count(annotation_file_name))
+
+        while True:
             image_path = annotation_file.readline().strip('\n')
-            if (not image_path):
+            if not image_path:
                 break
 
             image_path = os.path.join(annotation_image_dir, image_path)
-            image = cv2.imread(image_path)
-            if (image is None):
-                continue
+            imwidth, imheight = mef.get_image_size(image_path)
+            # image = cv2.imread(image_path)
+            # if (image is None):
+            if imwidth <= 0 or imheight <= 0:
+                print(f"WARNING: Could not parse image {image_path}. Skipping...")
+                # continue            # MEF: Finish reading it's meta. Don't jump here!
 
             nums = annotation_file.readline().strip('\n')
             one_image_boxes = []
             for face_index in range(int(nums)):
-                bounding_box_info = annotation_file.readline().strip(
-                    '\n').split(' ')
+                bounding_box_info = annotation_file.readline().strip('\n').split(' ')
 
-                xmin = float(bounding_box_info[0])
-                ymin = float(bounding_box_info[1])
-                width = float(bounding_box_info[2])
-                height = float(bounding_box_info[3])
+                # if image is not None:
+                if imwidth > 0 and imheight > 0:
+                    xmin = float(bounding_box_info[0])
+                    ymin = float(bounding_box_info[1])
+                    width = float(bounding_box_info[2])
+                    height = float(bounding_box_info[3])
 
-                xmax = xmin + width
-                ymax = ymin + height
+                    xmax = xmin + width
+                    ymax = ymin + height
 
-                if ((max(width, height) >=
-                     WIDERFaceDataset.minimum_face_size()) and (width > 0)
-                        and (height > 0)):
-                    one_image_boxes.append([xmin, ymin, xmax, ymax])
+                    if max(width, height) >= WIDERFaceDataset.minimum_face_size() and width > 0 and height > 0:
+                        one_image_boxes.append([xmin, ymin, xmax, ymax])
 
-            if (len(one_image_boxes)):
+            if len(one_image_boxes):
                 images.append(image_path)
                 bounding_boxes.append(one_image_boxes)
                 self._number_of_faces += len(one_image_boxes)
 
-        if (len(images)):
+            pt.update(step=1+1+int(nums))
+
+        if len(images):
             self._data['images'] = images
             self._data['bboxes'] = bounding_boxes
             self._data['number_of_faces'] = self._number_of_faces
-
             self._is_valid = True
-            print(self._number_of_faces, 'faces in ', len(images),
-                  'number of images for WIDER Face dataset.')
+            mef.tsprint(f"{self._number_of_faces} faces in {len(images)} images for WIDER Face dataset.")
         else:
+            mef.tsprint(f"No images found for WIDER Face dataset from annotation file {annotation_file_name}!")
             self._clear()
 
-        return (self.is_valid())
+        return self.is_valid()

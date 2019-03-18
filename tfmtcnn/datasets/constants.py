@@ -30,9 +30,9 @@ negative_ratio = 3
 
 landmark_ratio = 2
 
-positive_IoU = 0.65
-part_IoU = 0.40
-negative_IoU = 0.30
+positive_iou = 0.65
+part_iou = 0.40
+negative_iou = 0.30
 
 default_base_number_of_images = 700000
 

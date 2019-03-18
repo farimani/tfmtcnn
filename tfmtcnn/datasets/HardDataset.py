@@ -25,127 +25,108 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import numpy as np
-import cv2
+# import numpy as np
+# import cv2
 
 from tfmtcnn.datasets.SimpleDataset import SimpleDataset
 from tfmtcnn.datasets.SimpleFaceDataset import SimpleFaceDataset
 from tfmtcnn.datasets.HardFaceDataset import HardFaceDataset
-from tfmtcnn.datasets.LandmarkDataset import LandmarkDataset
+# from tfmtcnn.datasets.LandmarkDataset import LandmarkDataset
 from tfmtcnn.datasets.TensorFlowDataset import TensorFlowDataset
 
 import tfmtcnn.datasets.constants as datasets_constants
 
-from tfmtcnn.networks.FaceDetector import FaceDetector
+# from tfmtcnn.networks.FaceDetector import FaceDetector
 from tfmtcnn.networks.NetworkFactory import NetworkFactory
 
+import mef
 
 class HardDataset(SimpleDataset):
     def __init__(self, name):
         SimpleDataset.__init__(self, name)
         self._minimum_face_size = datasets_constants.minimum_face_size
 
-    def _generate_image_samples(self, annotation_file_name,
-                                annotation_image_dir, model_train_dir,
-                                base_number_of_images, target_root_dir):
-        status = True
-
+    def _generate_hard_image_samples(self, annotation_image_dir, annotation_file_name,
+                                     base_number_of_images, target_root_dir, model_train_dir):
         hard_face_dataset = HardFaceDataset()
-        status = hard_face_dataset.generate_samples(
-            annotation_image_dir, annotation_file_name, model_train_dir,
-            self.network_name(), self._minimum_face_size,
-            target_root_dir) and status
-
+        status = True
+        status = hard_face_dataset.generate_hard_samples(annotation_image_dir, annotation_file_name, model_train_dir,
+                                                         self.network_name(), self._minimum_face_size,
+                                                         target_root_dir) and status
         simple_face_dataset = SimpleFaceDataset()
-        status = simple_face_dataset.generate_samples(
-            annotation_image_dir, annotation_file_name, base_number_of_images,
-            NetworkFactory.network_size(self.network_name()),
-            target_root_dir) and status
-
-        return (status)
+        status = simple_face_dataset.generate_simple_samples(annotation_image_dir, annotation_file_name,
+                                                             base_number_of_images,
+                                                             NetworkFactory.network_size(self.network_name()),
+                                                             target_root_dir) and status
+        return status
 
     def _generate_dataset(self, target_root_dir):
         tensorflow_dataset = TensorFlowDataset()
 
         print('Generating TensorFlow dataset for positive images.')
-        if (not tensorflow_dataset.generate(
-                SimpleFaceDataset.positive_file_name(target_root_dir),
-                target_root_dir, 'positive')):
+        if not tensorflow_dataset.generate(SimpleFaceDataset.positive_file_name(target_root_dir),
+                                           target_root_dir, 'positive'):
             print('Error generating TensorFlow dataset for positive images.')
-            return (False)
+            return False
         print('Generated TensorFlow dataset for positive images.')
 
         print('Generating TensorFlow dataset for partial images.')
-        if (not tensorflow_dataset.generate(
-                SimpleFaceDataset.part_file_name(target_root_dir),
-                target_root_dir, 'part')):
+        if not tensorflow_dataset.generate(SimpleFaceDataset.part_file_name(target_root_dir), target_root_dir, 'part'):
             print('Error generating TensorFlow dataset for partial images.')
-            return (False)
+            return False
         print('Generated TensorFlow dataset for partial images.')
 
         print('Generating TensorFlow dataset for negative images.')
-        if (not tensorflow_dataset.generate(
-                SimpleFaceDataset.negative_file_name(target_root_dir),
-                target_root_dir, 'negative')):
+        if not tensorflow_dataset.generate(SimpleFaceDataset.negative_file_name(target_root_dir),
+                                           target_root_dir, 'negative'):
             print('Error generating TensorFlow dataset for negative images.')
-            return (False)
+            return False
         print('Generated TensorFlow dataset for negative images.')
 
         print('Generating TensorFlow dataset for landmark images.')
-        if (not tensorflow_dataset.generate(
-                self._image_list_file_name(target_root_dir), target_root_dir,
-                'image_list')):
+        if not tensorflow_dataset.generate(self._image_list_file_name(target_root_dir), target_root_dir, 'image_list'):
             print('Error generating TensorFlow dataset for landmark images.')
-            return (False)
+            return False
         print('Generated TensorFlow dataset for landmark images.')
 
-        return (True)
+        return True
 
-    def generate(self, annotation_image_dir, annotation_file_name,
-                 landmark_image_dir, landmark_file_name, model_train_dir,
-                 base_number_of_images, target_root_dir):
-
-        if (not os.path.isfile(annotation_file_name)):
-            return (False)
-        if (not os.path.exists(annotation_image_dir)):
-            return (False)
-
-        if (not os.path.isfile(landmark_file_name)):
-            return (False)
-        if (not os.path.exists(landmark_image_dir)):
-            return (False)
+    def generate_hard(self, annotation_image_dir, annotation_file_name, landmark_image_dir, landmark_file_name,
+                      base_number_of_images, target_root_dir, model_train_dir):
+        if not (mef.isfile(annotation_file_name) and
+                mef.isdir(annotation_image_dir) and
+                mef.isfile(landmark_file_name) and
+                mef.isdir(landmark_image_dir)):
+            return False
 
         target_root_dir = os.path.expanduser(target_root_dir)
         target_root_dir = os.path.join(target_root_dir, self.network_name())
-        if (not os.path.exists(target_root_dir)):
-            os.makedirs(target_root_dir)
+        mef.create_dir_if_necessary(target_root_dir, raise_on_error=True)
 
         self._minimum_face_size = datasets_constants.minimum_face_size
 
-        print('Generating image samples.')
-        status = self._generate_image_samples(
-            annotation_file_name, annotation_image_dir, model_train_dir,
-            base_number_of_images, target_root_dir)
-        if (not status):
-            print('Error generating image samples.')
-            return (False)
+        print('Generating hard image samples.')
+        status = self._generate_hard_image_samples(annotation_image_dir, annotation_file_name,
+                                                   base_number_of_images, target_root_dir, model_train_dir)
+        if not status:
+            print('Error generating hard image samples.')
+            return False
         print('Generated image samples.')
 
         print('Generating landmark samples.')
-        if (not super(HardDataset, self)._generate_landmark_samples(
-                landmark_image_dir, landmark_file_name, base_number_of_images,
-                target_root_dir)):
+        if not super(HardDataset, self)._generate_landmark_samples(landmark_image_dir, landmark_file_name,
+                                                                   base_number_of_images, target_root_dir):
             print('Error generating landmark samples.')
-            return (False)
+            return False
         print('Generated landmark samples.')
 
-        if (not self._generate_image_list(target_root_dir)):
-            return (False)
+        if not self._generate_image_list(target_root_dir):
+            return False
 
         print('Generating TensorFlow dataset.')
-        if (not self._generate_dataset(target_root_dir)):
+        if not self._generate_dataset(target_root_dir):
             print('Error generating TensorFlow dataset.')
-            return (False)
+            return False
         print('Generated TensorFlow dataset.')
 
-        return (True)
+        return True

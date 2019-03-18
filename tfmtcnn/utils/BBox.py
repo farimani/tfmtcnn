@@ -32,7 +32,7 @@ class BBox(object):
 
         self.x = bbox[0]
         self.y = bbox[1]
-        self.w = bbox[2] - bbox[0]
+        self.w = bbox[2] - bbox[0]      # MEF: TODO: Check if we need to add one here?
         self.h = bbox[3] - bbox[1]
 
     def expand(self, scale=0.05):
@@ -53,25 +53,25 @@ class BBox(object):
         y = self.y + self.h * point[1]
         return np.asarray([x, y])
 
-    def reprojectLandmark(self, landmark):
+    def reproject_landmark(self, landmark):
         p = np.zeros((len(landmark), 2))
         for i in range(len(landmark)):
             p[i] = self.reproject(landmark[i])
         return p
 
-    def projectLandmark(self, landmark):
+    def project_landmark(self, landmark):
         p = np.zeros((len(landmark), 2))
         for i in range(len(landmark)):
             p[i] = self.project(landmark[i])
         return p
 
-    def subBBox(self, leftR, rightR, topR, bottomR):
-        leftDelta = self.w * leftR
-        rightDelta = self.w * rightR
-        topDelta = self.h * topR
-        bottomDelta = self.h * bottomR
-        left = self.left + leftDelta
-        right = self.left + rightDelta
-        top = self.top + topDelta
-        bottom = self.top + bottomDelta
+    def sub_bbox(self, left, right, top, bottom):
+        left_delta = self.w * left
+        right_delta = self.w * right
+        top_delta = self.h * top
+        bottom_delta = self.h * bottom
+        left = self.left + left_delta
+        right = self.left + right_delta
+        top = self.top + top_delta
+        bottom = self.top + bottom_delta
         return BBox([left, right, top, bottom])

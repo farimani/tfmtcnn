@@ -30,13 +30,15 @@ import tensorflow as tf
 from tfmtcnn.trainers.SimpleNetworkTrainer import SimpleNetworkTrainer
 from tfmtcnn.datasets.TensorFlowDataset import TensorFlowDataset
 
+import mef
+import mef_tf
+
 
 class HardNetworkTrainer(SimpleNetworkTrainer):
-    def __init__(self, network_name='RNet'):
-        SimpleNetworkTrainer.__init__(self, network_name)
+    def __init__(self, network_name='RNet', batch_size=-1):
+        SimpleNetworkTrainer.__init__(self, network_name, batch_size=batch_size)
 
     def _read_data(self, dataset_root_dir):
-
         dataset_dir = self.dataset_dir(dataset_root_dir)
 
         positive_file_name = self._positive_file_name(dataset_dir)
@@ -66,10 +68,12 @@ class HardNetworkTrainer(SimpleNetworkTrainer):
 
         self._number_of_samples = 0
         for d in tensorflow_file_names:
-            self._number_of_samples += sum(
-                1 for _ in tf.python_io.tf_record_iterator(d))
+            # self._number_of_samples += sum(1 for _ in tf.python_io.tf_record_iterator(d))
+            mef.tsprint(f"Obtaining number of samples from TFRecords file {d}...")
+            n = mef_tf.get_num_tfrecords(d, show_progress=1000)
+            mef.tsprint(f"{n} records in TFRecords file.")
+            self._number_of_samples += n
 
         image_size = self.network_size()
         tensorflow_dataset = TensorFlowDataset()
-        return (tensorflow_dataset.read_tensorflow_files(
-            tensorflow_file_names, batch_sizes, image_size))
+        return tensorflow_dataset.read_tensorflow_files(tensorflow_file_names, batch_sizes, image_size)

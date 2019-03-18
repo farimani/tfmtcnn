@@ -24,7 +24,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import numpy as np
+# import numpy as np
 import tensorflow as tf
 from tensorflow.contrib import slim
 
@@ -37,6 +37,11 @@ class PNet(AbstractFaceDetector):
         AbstractFaceDetector.__init__(self)
         self._network_size = 12
         self._network_name = 'PNet'
+        self._input_batch = None
+        self._image_width = self._image_height = None
+        self._output_bounding_box = None
+        self._output_landmarks = None
+        self._output_class_probability = -1
 
     def _setup_basic_network(self, inputs, is_training=True):
         self._end_points = {}
@@ -109,21 +114,16 @@ class PNet(AbstractFaceDetector):
                 activation_fn=None)
             self._end_points[end_point] = landmark_predictions
 
-            return (conv4_1, bounding_box_predictions, landmark_predictions)
+            return conv4_1, bounding_box_predictions, landmark_predictions
 
     def setup_training_network(self, inputs):
-        convolution_output, bounding_box_predictions, landmark_predictions = self._setup_basic_network(
-            inputs, is_training=True)
+        convolution_output, bounding_box_predictions, \
+            landmark_predictions = self._setup_basic_network(inputs, is_training=True)
 
-        output_class_probability = tf.squeeze(
-            convolution_output, [1, 2], name='class_probability')
-        output_bounding_box = tf.squeeze(
-            bounding_box_predictions, [1, 2], name='bounding_box_predictions')
-        output_landmarks = tf.squeeze(
-            landmark_predictions, [1, 2], name="landmark_predictions")
-
-        return (output_class_probability, output_bounding_box,
-                output_landmarks)
+        output_class_probability = tf.squeeze(convolution_output, [1, 2], name='class_probability')
+        output_bounding_box = tf.squeeze(bounding_box_predictions, [1, 2], name='bounding_box_predictions')
+        output_landmarks = tf.squeeze(landmark_predictions, [1, 2], name="landmark_predictions")
+        return output_class_probability, output_bounding_box, output_landmarks
 
     def setup_inference_network(self, checkpoint_path):
         graph = tf.Graph()
@@ -131,24 +131,20 @@ class PNet(AbstractFaceDetector):
             self._input_batch = tf.placeholder(tf.float32, name='input_batch')
             self._image_width = tf.placeholder(tf.int32, name='image_width')
             self._image_height = tf.placeholder(tf.int32, name='image_height')
-            image_reshape = tf.reshape(
-                self._input_batch,
-                [1, self._image_height, self._image_width, 3])
+            image_reshape = tf.reshape(self._input_batch, [1, self._image_height, self._image_width, 3])
 
-            convolution_output, bounding_box_predictions, landmark_predictions = self._setup_basic_network(
-                image_reshape, is_training=False)
+            convolution_output, bounding_box_predictions, \
+                landmark_predictions = self._setup_basic_network(image_reshape, is_training=False)
 
-            self._output_class_probability = tf.squeeze(
-                convolution_output, axis=0)
-            self._output_bounding_box = tf.squeeze(
-                bounding_box_predictions, axis=0)
+            self._output_class_probability = tf.squeeze(convolution_output, axis=0)
+            self._output_bounding_box = tf.squeeze(bounding_box_predictions, axis=0)
             self._output_landmarks = tf.squeeze(landmark_predictions, axis=0)
 
-            self._session = tf.Session(
-                config=tf.ConfigProto(
-                    allow_soft_placement=True,
-                    gpu_options=tf.GPUOptions(allow_growth=True)))
-            return (self.load_model(self._session, checkpoint_path))
+            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.8, allow_growth=True)
+            # gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.8)
+            cfg = tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options, log_device_placement=False)
+            self._session = tf.Session(config=cfg)
+            return self.load_model(self._session, checkpoint_path)
 
     def detect(self, input_batch):
         image_height, image_width, _ = input_batch.shape
@@ -159,4 +155,4 @@ class PNet(AbstractFaceDetector):
                 self._image_width: image_width,
                 self._image_height: image_height
             })
-        return (class_probabilities, bounding_boxes)
+        return class_probabilities, bounding_boxes

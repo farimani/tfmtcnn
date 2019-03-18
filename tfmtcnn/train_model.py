@@ -25,34 +25,34 @@ Usage:
 ```shell
 
 $ python tfmtcnn/tfmtcnn/train_model.py \
-	--network_name PNet \ 
-	--train_root_dir ../data/models/mtcnn/train \
-	--dataset_root_dir ../data/datasets/mtcnn \
-	--base_learning_rate 0.001 \
-	--max_number_of_epoch 19 \
-	--test_dataset FDDBDataset \
-	--test_annotation_image_dir /datasets/FDDB/ \
-	--test_annotation_file /datasets/FDDB/FDDB-folds/FDDB-fold-01-ellipseList.txt
+    --network_name PNet \
+    --train_root_dir ../data/models/mtcnn/train \
+    --dataset_root_dir ../data/datasets/mtcnn \
+    --base_learning_rate 0.001 \
+    --max_number_of_epoch 19 \
+    --test_dataset FDDBDataset \
+    --test_annotation_image_dir /datasets/FDDB/ \
+    --test_annotation_file /datasets/FDDB/FDDB-folds/FDDB-fold-01-ellipseList.txt
 
 $ python tfmtcnn/tfmtcnn/train_model.py \
-	--network_name RNet \ 
-	--train_root_dir ../data/models/mtcnn/train \
-	--dataset_root_dir ../data/datasets/mtcnn \
-	--base_learning_rate 0.001 \
-	--max_number_of_epoch 22 \
-	--test_dataset FDDBDataset \
-	--test_annotation_image_dir /datasets/FDDB/ \
-	--test_annotation_file /datasets/FDDB/FDDB-folds/FDDB-fold-01-ellipseList.txt
+    --network_name RNet \
+    --train_root_dir ../data/models/mtcnn/train \
+    --dataset_root_dir ../data/datasets/mtcnn \
+    --base_learning_rate 0.001 \
+    --max_number_of_epoch 22 \
+    --test_dataset FDDBDataset \
+    --test_annotation_image_dir /datasets/FDDB/ \
+    --test_annotation_file /datasets/FDDB/FDDB-folds/FDDB-fold-01-ellipseList.txt
 
 $ python tfmtcnn/tfmtcnn/train_model.py \
-	--network_name ONet \ 
-	--train_root_dir ../data/models/mtcnn/train \
-	--dataset_root_dir ../data/datasets/mtcnn \
-	--base_learning_rate 0.001 \
-	--max_number_of_epoch 21 \
-	--test_dataset FDDBDataset \
-	--test_annotation_image_dir /datasets/FDDB/ \
-	--test_annotation_file /datasets/FDDB/FDDB-folds/FDDB-fold-01-ellipseList.txt
+    --network_name ONet \
+    --train_root_dir ../data/models/mtcnn/train \
+    --dataset_root_dir ../data/datasets/mtcnn \
+    --base_learning_rate 0.001 \
+    --max_number_of_epoch 21 \
+    --test_dataset FDDBDataset \
+    --test_annotation_image_dir /datasets/FDDB/ \
+    --test_annotation_file /datasets/FDDB/FDDB-folds/FDDB-fold-01-ellipseList.txt
 ```
 """
 
@@ -106,8 +106,8 @@ def parse_arguments(argv):
     parser.add_argument(
         '--log_every_n_steps',
         type=int,
-        help='The frequency with which logs are print.',
-        default=3840)
+        help='The frequency with which logs are printed.',
+        default=1000)
 
     parser.add_argument(
         '--test_dataset',
@@ -119,52 +119,48 @@ def parse_arguments(argv):
     parser.add_argument(
         '--test_annotation_file',
         type=str,
-        help=
-        'Face dataset annotations file used for evaluating the trained model.',
+        help='Face dataset annotations file used for evaluating the trained model.',
         default=None)
 
     parser.add_argument(
         '--test_annotation_image_dir',
         type=str,
-        help=
-        'Face dataset image directory used for evaluating the trained model.',
+        help='Face dataset image directory used for evaluating the trained model.',
         default=None)
 
-    return (parser.parse_args(argv))
+    parser.add_argument(
+        '--batch_size',
+        type=int,
+        help='Number of images to process in a batch.',
+        default=SimpleNetworkTrainer.default_batch_size())
+
+    return parser.parse_args(argv)
 
 
 def main(args):
-    if (not (args.network_name in ['PNet', 'RNet', 'ONet'])):
-        raise ValueError(
-            'The network name should be either PNet, RNet or ONet.')
+    if not (args.network_name in ['PNet', 'RNet', 'ONet']):
+        raise ValueError(f"The network name should be either PNet, RNet or ONet.")
 
-    if (not args.dataset_root_dir):
-        raise ValueError(
-            'You must supply the input dataset directory with --dataset_root_dir.'
-        )
+    if not args.dataset_root_dir:
+        raise ValueError(f"You must supply the input dataset directory with --dataset_root_dir.")
 
-    if (not args.test_annotation_file):
-        raise ValueError(
-            'You must supply face dataset annotations file used for evaluating the trained model with --test_annotation_file.'
-        )
-    if (not args.test_annotation_image_dir):
-        raise ValueError(
-            'You must supply face dataset image directory used for evaluating the trained model with --test_annotation_image_dir.'
-        )
+    if not args.test_annotation_file:
+        raise ValueError(f"You must supply face dataset annotations file used for evaluating the "
+                         f"trained model with --test_annotation_file.")
+    if not args.test_annotation_image_dir:
+        raise ValueError(f"You must supply face dataset image directory used for evaluating the trained "
+                         f"model with --test_annotation_image_dir.")
 
-    if (args.network_name == 'PNet'):
-        trainer = SimpleNetworkTrainer(args.network_name)
+    if args.network_name == 'PNet':
+        trainer = SimpleNetworkTrainer(args.network_name, batch_size=args.batch_size)
     else:
-        trainer = HardNetworkTrainer(args.network_name)
+        trainer = HardNetworkTrainer(args.network_name, batch_size=args.batch_size)
 
-    status = trainer.load_test_dataset(args.test_dataset,
-                                       args.test_annotation_image_dir,
-                                       args.test_annotation_file)
-    if (not status):
-        print(
-            'Error loading the test dataset for evaluating the trained model.')
+    status = trainer.load_test_dataset(args.test_dataset, args.test_annotation_image_dir, args.test_annotation_file)
+    if not status:
+        print('Error loading the test dataset for evaluating the trained model.')
 
-    if (args.train_root_dir):
+    if args.train_root_dir:
         train_root_dir = args.train_root_dir
     else:
         train_root_dir = NetworkFactory.model_train_dir()
@@ -172,12 +168,11 @@ def main(args):
     status = trainer.train(args.network_name, args.dataset_root_dir,
                            train_root_dir, args.base_learning_rate,
                            args.max_number_of_epoch, args.log_every_n_steps)
-    if (status):
-        print(args.network_name +
-              ' - network is trained and weights are generated at ' +
-              train_root_dir)
+    if status:
+        print(f"{args.network_name} - network is trained and weights are generated at {train_root_dir}.")
     else:
-        print('Error training the model.')
+        # print('Error training the model.')
+        raise RuntimeError('Error training the model.')
 
 
 if __name__ == '__main__':

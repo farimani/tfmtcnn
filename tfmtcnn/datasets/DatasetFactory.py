@@ -34,41 +34,41 @@ from tfmtcnn.datasets.FDDBDataset import FDDBDataset
 
 class DatasetFactory(object):
 
-    __positive_IoU = datasets_constants.positive_IoU
-    __part_IoU = datasets_constants.part_IoU
-    __negative_IoU = datasets_constants.negative_IoU
+    __positive_iou = datasets_constants.positive_iou
+    __part_iou = datasets_constants.part_iou
+    __negative_iou = datasets_constants.negative_iou
 
     def __init__(self):
         pass
 
     @classmethod
-    def positive_IoU(cls):
-        return (DatasetFactory.__positive_IoU)
+    def positive_iou(cls):
+        return DatasetFactory.__positive_iou
 
     @classmethod
-    def part_IoU(cls):
-        return (DatasetFactory.__part_IoU)
+    def part_iou(cls):
+        return DatasetFactory.__part_iou
 
     @classmethod
-    def negative_IoU(cls):
-        return (DatasetFactory.__negative_IoU)
+    def negative_iou(cls):
+        return DatasetFactory.__negative_iou
 
     @classmethod
     def face_dataset(cls, name):
-        if (name == CelebADataset.name()):
-            return (CelebADataset())
-        elif (name == WIDERFaceDataset.name()):
-            return (WIDERFaceDataset())
-        elif (name == FDDBDataset.name()):
-            return (FDDBDataset())
+        if name == CelebADataset.name():
+            return CelebADataset()
+        elif name == WIDERFaceDataset.name():
+            return WIDERFaceDataset()
+        elif name == FDDBDataset.name():
+            return FDDBDataset()
         else:
-            return (None)
+            return None
 
     @classmethod
     def landmark_dataset(cls, name):
-        if (name == CelebADataset.name()):
-            return (CelebADataset())
-        elif (name == LFWLandmarkDataset.name()):
-            return (LFWLandmarkDataset())
+        if name == CelebADataset.name():
+            return CelebADataset()
+        elif name == LFWLandmarkDataset.name():
+            return LFWLandmarkDataset()
         else:
-            return (None)
+            return None

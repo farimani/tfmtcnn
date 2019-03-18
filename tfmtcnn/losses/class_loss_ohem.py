@@ -31,7 +31,7 @@ num_keep_radio = 0.7
 
 def class_loss_ohem(cls_prob, label):
     zeros = tf.zeros_like(label)
-    #label=-1 --> label=0net_factory
+    # label=-1 --> label=0net_factory
     label_filter_invalid = tf.where(tf.less(label, 0), zeros, label)
     num_cls_prob = tf.size(cls_prob)
     cls_prob_reshape = tf.reshape(cls_prob, [num_cls_prob, -1])
@@ -46,7 +46,7 @@ def class_loss_ohem(cls_prob, label):
     valid_inds = tf.where(label < zeros, zeros, ones)
     num_valid = tf.reduce_sum(valid_inds)
     keep_num = tf.cast(num_valid * num_keep_radio, dtype=tf.int32)
-    #set 0 to invalid sample
+    # set 0 to invalid sample
     loss = loss * valid_inds
     loss, _ = tf.nn.top_k(loss, k=keep_num)
     return tf.reduce_mean(loss)

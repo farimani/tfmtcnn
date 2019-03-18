@@ -38,9 +38,13 @@ class RNet(AbstractFaceDetector):
         self._network_size = 24
         self._network_name = 'RNet'
         self._batch_size = batch_size
+        self._input_batch = None
+        self._output_bounding_box = None
+        self._output_landmarks = None
+        self._output_class_probability = -1
 
     def batch_size(self):
-        return (self._batch_size)
+        return self._batch_size
 
     def _setup_basic_network(self, inputs, is_training=True):
         self._end_points = {}
@@ -51,7 +55,6 @@ class RNet(AbstractFaceDetector):
                             biases_initializer=tf.zeros_initializer(),
                             weights_regularizer=slim.l2_regularizer(0.00005),
                             padding='valid'):
-
             end_point = 'conv1'
             net = slim.conv2d(
                 inputs,
@@ -125,7 +128,7 @@ class RNet(AbstractFaceDetector):
                     landmark_predictions)
 
     def setup_training_network(self, inputs):
-        return (self._setup_basic_network(inputs, is_training=True))
+        return self._setup_basic_network(inputs, is_training=True)
 
     def setup_inference_network(self, checkpoint_path):
         graph = tf.Graph()
@@ -138,17 +141,17 @@ class RNet(AbstractFaceDetector):
                     self.network_size(), 3
                 ],
                 name='input_batch')
-            self._output_class_probability, self._output_bounding_box, self._output_landmarks = self._setup_basic_network(
-                self._input_batch, is_training=False)
+            self._output_class_probability, self._output_bounding_box, \
+                self._output_landmarks = self._setup_basic_network(self._input_batch, is_training=False)
 
-            self._session = tf.Session(
-                config=tf.ConfigProto(
-                    allow_soft_placement=True,
-                    gpu_options=tf.GPUOptions(allow_growth=True)))
-            return (self.load_model(self._session, checkpoint_path))
+            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.8, allow_growth=True)
+            # gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.8)
+            cfg = tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options, log_device_placement=False)
+            self._session = tf.Session(config=cfg)
+            return self.load_model(self._session, checkpoint_path)
 
     def detect(self, data_batch):
-        scores = []
+        # scores = []
         batch_size = self.batch_size()
 
         minibatch = []

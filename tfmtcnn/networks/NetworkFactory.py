@@ -37,71 +37,66 @@ class NetworkFactory(object):
 
     @classmethod
     def network(cls, network_name='PNet'):
-        if (network_name == 'PNet'):
+        if network_name == 'PNet':
             network_object = PNet()
-            return (network_object)
-        elif (network_name == 'RNet'):
+            return network_object
+        elif network_name == 'RNet':
             network_object = RNet()
-            return (network_object)
-        elif (network_name == 'ONet'):
+            return network_object
+        elif network_name == 'ONet':
             network_object = ONet()
-            return (network_object)
+            return network_object
         else:
             network_object = PNet()
-            return (network_object)
+            return network_object
 
     @classmethod
     def network_size(cls, network_name='PNet'):
-        if (network_name == 'PNet'):
+        if network_name == 'PNet':
             network_size = 12
-            return (network_size)
-        elif (network_name == 'RNet'):
+        elif network_name == 'RNet':
             network_size = 24
-            return (network_size)
-        elif (network_name == 'ONet'):
+        elif network_name == 'ONet':
             network_size = 48
-            return (network_size)
         else:
             network_size = 12
-            return (network_size)
+
+        return network_size
 
     @classmethod
     def previous_network(cls, network_name='PNet'):
-        if (network_name == 'ONet'):
+        if network_name == 'ONet':
             previous_network = 'RNet'
-            return (previous_network)
-        elif (network_name == 'RNet'):
+        elif network_name == 'RNet':
             previous_network = 'PNet'
-            return (previous_network)
         else:
             previous_network = 'PNet'
-            return (previous_network)
+
+        return previous_network
 
     @classmethod
     def model_deploy_dir(cls):
         model_root_dir, _ = os.path.split(os.path.realpath(__file__))
-        model_root_dir = os.path.join(model_root_dir,
-                                      '../models/mtcnn/deploy/')
-        return (model_root_dir)
+        model_root_dir = os.path.join(model_root_dir, '../models/mtcnn/deploy/')
+        return model_root_dir
 
     @classmethod
     def model_train_dir(cls):
         model_root_dir, _ = os.path.split(os.path.realpath(__file__))
-        model_root_dir = os.path.join(model_root_dir,
-                                      '../../data/models/mtcnn/train/')
-        return (model_root_dir)
+        model_root_dir = os.path.join(model_root_dir, '../../data/models/mtcnn/train/')
+        return model_root_dir
 
     @classmethod
     def loss_ratio(cls, network_name):
-        if (network_name == 'PNet'):
+        if network_name == 'PNet':
             class_loss_ratio = 1.0
             bbox_loss_ratio = 0.5
             landmark_loss_ratio = 0.5
-        elif (network_name == 'RNet'):
+        elif network_name == 'RNet':
             class_loss_ratio = 1.0
             bbox_loss_ratio = 0.5
             landmark_loss_ratio = 0.5
-        elif (network_name == 'ONet'):
+        elif network_name == 'ONet':
             class_loss_ratio = 1.0
             bbox_loss_ratio = 0.5
             landmark_loss_ratio = 1.0
@@ -110,4 +105,4 @@ class NetworkFactory(object):
             bbox_loss_ratio = 0.5
             landmark_loss_ratio = 0.5
 
-        return (class_loss_ratio, bbox_loss_ratio, landmark_loss_ratio)
+        return class_loss_ratio, bbox_loss_ratio, landmark_loss_ratio

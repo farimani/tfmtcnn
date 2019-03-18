@@ -27,27 +27,27 @@ Usage:
 $ python tfmtcnn/tfmtcnn/webcamera_demo.py
 
 $ python tfmtcnn/tfmtcnn/webcamera_demo.py \
-	 --webcamera_id 0 
+     --webcamera_id 0
 
 $ python tfmtcnn/tfmtcnn/webcamera_demo.py \
-	 --webcamera_id 0 \
-	 --threshold 0.9 
+     --webcamera_id 0 \
+     --threshold 0.9
 
 $ python tfmtcnn/tfmtcnn/webcamera_demo.py \
-	 --webcamera_id 0 \
-	 --threshold 0.9 \
-	 --test_mode
+     --webcamera_id 0 \
+     --threshold 0.9 \
+     --test_mode
 
 $ python tfmtcnn/tfmtcnn/webcamera_demo.py \
-	 --webcamera_id 0 \
-	 --threshold 0.9 \
-	 --model_root_dir tfmtcnn/models/mtcnn/wider-celeba
+     --webcamera_id 0 \
+     --threshold 0.9 \
+     --model_root_dir tfmtcnn/models/mtcnn/wider-celeba
 
 $ python tfmtcnn/tfmtcnn/webcamera_demo.py \
-	 --webcamera_id 0 \
-	 --threshold 0.9 \
-	 --minimum_face_size 120 \
-	 --model_root_dir tfmtcnn/models/mtcnn/wider-celeba 
+     --webcamera_id 0 \
+     --threshold 0.9 \
+     --minimum_face_size 120 \
+     --model_root_dir tfmtcnn/models/mtcnn/wider-celeba
 ```
 """
 
@@ -68,8 +68,7 @@ from tfmtcnn.networks.NetworkFactory import NetworkFactory
 
 def parse_arguments(argv):
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '--webcamera_id', type=int, help='Webcamera ID.', default=0)
+    parser.add_argument('--webcamera_id', type=int, help='Webcamera ID.', default=0)
 
     parser.add_argument(
         '--threshold',
@@ -90,14 +89,14 @@ def parse_arguments(argv):
         type=int,
         help='Minimum face size.',
         default=100)
-    return (parser.parse_args(argv))
+    return parser.parse_args(argv)
 
 
 def main(args):
-    if (args.model_root_dir):
+    if args.model_root_dir:
         model_root_dir = args.model_root_dir
     else:
-        if (args.test_mode):
+        if args.test_mode:
             model_root_dir = NetworkFactory.model_train_dir()
         else:
             model_root_dir = NetworkFactory.model_deploy_dir()
@@ -116,7 +115,7 @@ def main(args):
             image_height, image_width, image_channels = input_bgr_image.shape
             input_rgb_image = cv2.cvtColor(input_bgr_image, cv2.COLOR_BGR2RGB)
 
-            #boxes_c, landmarks = face_detector.detect(input_bgr_image)
+            # boxes_c, landmarks = face_detector.detect(input_bgr_image)
             boxes_c, landmarks = face_detector.detect(input_rgb_image)
 
             end_time = cv2.getTickCount()
@@ -139,11 +138,10 @@ def main(args):
                 crop_width = crop_box[3] - crop_box[1]
                 crop_height = crop_box[2] - crop_box[0]
 
-                if (crop_height < args.minimum_face_size) or (
-                        crop_width < args.minimum_face_size):
+                if crop_height < args.minimum_face_size or crop_width < args.minimum_face_size:
                     continue
 
-                if (probability > args.threshold):
+                if probability > args.threshold:
                     cv2.rectangle(input_bgr_image, (crop_box[0], crop_box[1]),
                                   (crop_box[2], crop_box[3]), (0, 255, 0), 1)
                     cv2.putText(input_bgr_image,

@@ -32,11 +32,10 @@ class AbstractDataset(object):
         self._network_name = network_name
 
     def network_name(self):
-        return (self._network_name)
+        return self._network_name
 
-    def _image_list_file_name(self, target_root_dir):
+    @staticmethod
+    def _image_list_file_name(target_root_dir):
         image_list_file_name = os.path.join(target_root_dir, 'image_list.txt')
-        return (image_list_file_name)
+        return image_list_file_name
 
-    def generate_dataset(self, target_root_dir):
-        raise NotImplementedError('Must be implemented by the subclass.')

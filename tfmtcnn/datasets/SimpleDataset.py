@@ -34,112 +34,88 @@ from tfmtcnn.datasets.TensorFlowDataset import TensorFlowDataset
 
 from tfmtcnn.networks.NetworkFactory import NetworkFactory
 
+import mef
+
 
 class SimpleDataset(AbstractDataset):
     def __init__(self, network_name='PNet'):
         AbstractDataset.__init__(self, network_name)
 
-    def _generate_landmark_samples(self, landmark_image_dir,
-                                   landmark_file_name, base_number_of_images,
+    def _generate_landmark_samples(self, landmark_image_dir, landmark_file_name, base_number_of_images,
                                    target_root_dir):
         landmark_dataset = LandmarkDataset()
-        return (landmark_dataset.generate(
-            landmark_image_dir, landmark_file_name, base_number_of_images,
-            NetworkFactory.network_size(self.network_name()), target_root_dir))
+        return landmark_dataset.generate(landmark_image_dir, landmark_file_name, base_number_of_images,
+                                         NetworkFactory.network_size(self.network_name()), target_root_dir)
 
-    def _generate_image_samples(self, annotation_image_dir,
-                                annotation_file_name, base_number_of_images,
-                                target_root_dir):
+    def _generate_simple_image_samples(self, annotation_image_dir, annotation_file_name, base_number_of_images,
+                                       target_root_dir):
         face_dataset = SimpleFaceDataset()
-        return (face_dataset.generate_samples(
-            annotation_image_dir, annotation_file_name, base_number_of_images,
-            NetworkFactory.network_size(self.network_name()), target_root_dir))
+        return face_dataset.generate_simple_samples(annotation_image_dir, annotation_file_name, base_number_of_images,
+                                                    NetworkFactory.network_size(self.network_name()), target_root_dir)
 
     def _generate_image_list(self, target_root_dir):
-        positive_file = open(
-            SimpleFaceDataset.positive_file_name(target_root_dir), 'r')
-        positive_data = positive_file.readlines()
+        image_list_file = open(self._image_list_file_name(target_root_dir), 'w')
 
-        part_file = open(
-            SimpleFaceDataset.part_file_name(target_root_dir), 'r')
-        part_data = part_file.readlines()
+        files = (("positive", SimpleFaceDataset.positive_file_name(target_root_dir)),
+                 ("partial",  SimpleFaceDataset.part_file_name(target_root_dir)),
+                 ("negative", SimpleFaceDataset.negative_file_name(target_root_dir)),
+                 ("landmark", LandmarkDataset.landmark_file_name(target_root_dir)))
+        for desc in files:
+            with open(desc[1], 'r') as f:
+                lines = f.readlines()
+                pt = mef.ProgressText(len(lines), newline_when_done=False)
 
-        negative_file = open(
-            SimpleFaceDataset.negative_file_name(target_root_dir), 'r')
-        negative_data = negative_file.readlines()
-
-        landmark_file = open(
-            LandmarkDataset.landmark_file_name(target_root_dir), 'r')
-        landmark_data = landmark_file.readlines()
-
-        image_list_file = open(
-            self._image_list_file_name(target_root_dir), 'w')
-
-        for i in np.arange(len(positive_data)):
-            image_list_file.write(positive_data[i])
-
-        for i in np.arange(len(negative_data)):
-            image_list_file.write(negative_data[i])
-
-        for i in np.arange(len(part_data)):
-            image_list_file.write(part_data[i])
-
-        for i in np.arange(len(landmark_data)):
-            image_list_file.write(landmark_data[i])
-
-        return (True)
+                # MEF: Skip blank lines (caused by use of linesep, so it shouldn't happen again, but for old files)
+                for line in lines:
+                    if line.strip():
+                        image_list_file.write(line)
+                    pt.update(f"Writing list of {desc[0]} samples... ")
+        print("")
+        return True
 
     def _generate_dataset(self, target_root_dir):
         tensorflow_dataset = TensorFlowDataset()
-        if (not tensorflow_dataset.generate(
-                self._image_list_file_name(target_root_dir), target_root_dir,
-                'image_list')):
-            return (False)
+        if not tensorflow_dataset.generate(self._image_list_file_name(target_root_dir), target_root_dir, 'image_list'):
+            return False
 
-        return (True)
+        return True
 
-    def generate(self, annotation_image_dir, annotation_file_name,
-                 landmark_image_dir, landmark_file_name, base_number_of_images,
-                 target_root_dir):
-
-        if (not os.path.isfile(annotation_file_name)):
-            return (False)
-        if (not os.path.exists(annotation_image_dir)):
-            return (False)
-
-        if (not os.path.isfile(landmark_file_name)):
-            return (False)
-        if (not os.path.exists(landmark_image_dir)):
-            return (False)
+    def generate_simple(self, annotation_image_dir, annotation_file_name, landmark_image_dir, landmark_file_name,
+                        base_number_of_images, target_root_dir):
+        if not (mef.isfile(annotation_file_name) and
+                mef.isdir(annotation_image_dir) and
+                mef.isfile(landmark_file_name) and
+                mef.isdir(landmark_image_dir)):
+            return False
 
         target_root_dir = os.path.expanduser(target_root_dir)
         target_root_dir = os.path.join(target_root_dir, self.network_name())
-        if (not os.path.exists(target_root_dir)):
-            os.makedirs(target_root_dir)
+        mef.create_dir_if_necessary(target_root_dir, raise_on_error=True)
 
         print('Generating image samples.')
-        if (not self._generate_image_samples(
-                annotation_image_dir, annotation_file_name,
-                base_number_of_images, target_root_dir)):
+        if not self._generate_simple_image_samples(annotation_image_dir, annotation_file_name, base_number_of_images,
+                                                   target_root_dir):
             print('Error generating image samples.')
-            return (False)
+            return False
         print('Generated image samples.')
 
         print('Generating landmark samples.')
-        if (not self._generate_landmark_samples(
-                landmark_image_dir, landmark_file_name, base_number_of_images,
-                target_root_dir)):
+        if not self._generate_landmark_samples(landmark_image_dir, landmark_file_name, base_number_of_images,
+                                               target_root_dir):
             print('Error generating landmark samples.')
-            return (False)
+            return False
         print('Generated landmark samples.')
 
-        if (not self._generate_image_list(target_root_dir)):
-            return (False)
+        print('Generating image lists.')
+        if not self._generate_image_list(target_root_dir):
+            print('Error generating image lists.')
+            return False
+        print('Generated image lists.')
 
         print('Generating TensorFlow dataset.')
-        if (not self._generate_dataset(target_root_dir)):
+        if not self._generate_dataset(target_root_dir):
             print('Error generating TensorFlow dataset.')
-            return (False)
+            return False
         print('Generated TensorFlow dataset.')
 
-        return (True)
+        return True

@@ -34,15 +34,16 @@ class AbstractFaceDetector(object):
         self._end_points = {}
         self._session = None
         self._is_model_loaded = False
+        self._model_path = None
 
     def network_size(self):
-        return (self._network_size)
+        return self._network_size
 
     def network_name(self):
-        return (self._network_name)
+        return self._network_name
 
     def model_path(self):
-        return (self._model_path)
+        return self._model_path
 
     def _setup_basic_network(self, inputs):
         raise NotImplementedError('Must be implemented by the subclass.')
@@ -54,23 +55,22 @@ class AbstractFaceDetector(object):
         raise NotImplementedError('Must be implemented by the subclass.')
 
     def load_model(self, session, checkpoint_path):
+        if self._is_model_loaded:
+            return True
 
-        if (self._is_model_loaded):
-            return (True)
-
-        if (tf.gfile.IsDirectory(checkpoint_path)):
+        if tf.gfile.IsDirectory(checkpoint_path):
             self._model_path = tf.train.latest_checkpoint(checkpoint_path)
         else:
             self._model_path = checkpoint_path
 
-        if (not self._model_path):
+        if not self._model_path:
             self._is_model_loaded = False
         else:
             saver = tf.train.Saver()
             saver.restore(session, self._model_path)
             self._is_model_loaded = True
 
-        return (self._is_model_loaded)
+        return self._is_model_loaded
 
     def detect(self, data_batch):
         raise NotImplementedError('Must be implemented by the subclass.')

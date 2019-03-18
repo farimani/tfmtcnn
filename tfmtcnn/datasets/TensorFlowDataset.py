@@ -25,10 +25,12 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import sys
+# import sys
 import random
 import cv2
 import tensorflow as tf
+
+import mef
 
 
 def _int64_feature(value):
@@ -82,101 +84,114 @@ def _process_image_withoutcoder(filename):
     image_width = input_bgr_image.shape[1]
     assert (input_bgr_image.shape[2] == 3)
 
-    return (image_data, image_height, image_width)
+    return image_data, image_height, image_width
 
 
 class TensorFlowDataset(object):
+    # bbox dict with initialized values
+    _bbox_dict = {
+        'xmin': 0,
+        'ymin': 0,
+        'xmax': 0,
+        'ymax': 0,
+        'xlefteye': 0,
+        'ylefteye': 0,
+        'xrighteye': 0,
+        'yrighteye': 0,
+        'xnose': 0,
+        'ynose': 0,
+        'xleftmouth': 0,
+        'yleftmouth': 0,
+        'xrightmouth': 0,
+        'yrightmouth': 0,    
+    }
+
     def __init__(self):
         self._is_valid = False
         self._dataset = []
 
     def is_valid(self):
-        return (self._is_valid)
+        return self._is_valid
 
     def data(self):
-        return (self._dataset)
+        return self._dataset
 
     @classmethod
     def tensorflow_file_name(cls, target_dir, target_name):
         target_name = target_name + '.tfrecord'
         file_name = os.path.join(target_dir, target_name)
-        return (file_name)
+        return file_name
 
     def _read_dataset(self, input_file_name):
-
         self._is_valid = False
         self._dataset = []
-
         imagelist = open(input_file_name, 'r')
 
-        for line in imagelist.readlines():
+        lines = imagelist.readlines()
+        pt = mef.ProgressText(len(lines))
+
+        for i, line in enumerate(lines):
             info = line.strip().split(' ')
-            data_example = dict()
-            bbox = dict()
-            data_example['filename'] = info[0]
-            data_example['label'] = int(info[1])
-            bbox['xmin'] = 0
-            bbox['ymin'] = 0
-            bbox['xmax'] = 0
-            bbox['ymax'] = 0
-            bbox['xlefteye'] = 0
-            bbox['ylefteye'] = 0
-            bbox['xrighteye'] = 0
-            bbox['yrighteye'] = 0
-            bbox['xnose'] = 0
-            bbox['ynose'] = 0
-            bbox['xleftmouth'] = 0
-            bbox['yleftmouth'] = 0
-            bbox['xrightmouth'] = 0
-            bbox['yrightmouth'] = 0
-            if len(info) == 6:
-                bbox['xmin'] = float(info[2])
-                bbox['ymin'] = float(info[3])
-                bbox['xmax'] = float(info[4])
-                bbox['ymax'] = float(info[5])
-            if len(info) == 12:
-                bbox['xlefteye'] = float(info[2])
-                bbox['ylefteye'] = float(info[3])
-                bbox['xrighteye'] = float(info[4])
-                bbox['yrighteye'] = float(info[5])
-                bbox['xnose'] = float(info[6])
-                bbox['ynose'] = float(info[7])
-                bbox['xleftmouth'] = float(info[8])
-                bbox['yleftmouth'] = float(info[9])
-                bbox['xrightmouth'] = float(info[10])
-                bbox['yrightmouth'] = float(info[11])
+            info_len = len(info)
 
-            data_example['bbox'] = bbox
-            self._dataset.append(data_example)
+            if info_len > 0:    # MEF: Skip blank lines - problem with legacy code...
+                bbox = self._bbox_dict.copy()
 
-        if (len(self._dataset)):
+                if info_len == 6:
+                    bbox['xmin'] = float(info[2])
+                    bbox['ymin'] = float(info[3])
+                    bbox['xmax'] = float(info[4])
+                    bbox['ymax'] = float(info[5])
+                elif info_len == 12:
+                    bbox['xlefteye'] = float(info[2])
+                    bbox['ylefteye'] = float(info[3])
+                    bbox['xrighteye'] = float(info[4])
+                    bbox['yrighteye'] = float(info[5])
+                    bbox['xnose'] = float(info[6])
+                    bbox['ynose'] = float(info[7])
+                    bbox['xleftmouth'] = float(info[8])
+                    bbox['yleftmouth'] = float(info[9])
+                    bbox['xrightmouth'] = float(info[10])
+                    bbox['yrightmouth'] = float(info[11])
+                elif info_len != 2:
+                    # positives and partials have 6 fields, negatives have 2 and landmarks have 12
+                    raise ValueError(f"Error on line {i+1} from image list file {input_file_name}. "
+                                     f"Expected 6 or 12 fields, got {info_len}.")
+                data_example = {
+                    'filename': info[0],
+                    'label': int(info[1]),
+                    'bbox': bbox
+                }
+                self._dataset.append(data_example)
+
+            pt.update(f"Reading from image list {input_file_name}...")
+
+        if len(self._dataset):
+            print(f"Shuffling dataset of length {len(self._dataset)}...")
             random.shuffle(self._dataset)
+            print(f"Shuffle finished.")
             self._is_valid = True
 
-        return (self._is_valid)
+        return self._is_valid
 
-    def _add_to_tfrecord(self, filename, image_example, tfrecord_writer):
+    @staticmethod
+    def _add_to_tfrecord(filename, image_example, tfrecord_writer):
         image_data, height, width = _process_image_withoutcoder(filename)
         example = _convert_to_example_simple(image_example, image_data)
         tfrecord_writer.write(example.SerializeToString())
 
-    def read_tensorflow_file(self, tensorflow_file_name, batch_size,
-                             image_size):
-        filename_queue = tf.train.string_input_producer([tensorflow_file_name],
-                                                        shuffle=True)
-
+    @staticmethod
+    def read_tensorflow_file(tensorflow_file_name, batch_size, image_size):
+        filename_queue = tf.train.string_input_producer([tensorflow_file_name], shuffle=True)
         reader = tf.TFRecordReader()
         _, serialized_example = reader.read(filename_queue)
-        image_features = tf.parse_single_example(
-            serialized_example,
-            features={
-                'image/encoded':
-                tf.FixedLenFeature([], tf.string),  #one image  one record
-                'image/label': tf.FixedLenFeature([], tf.int64),
-                'image/roi': tf.FixedLenFeature([4], tf.float32),
-                'image/landmark': tf.FixedLenFeature([10], tf.float32)
-            })
-
+        feat_dict = {
+            'image/encoded': tf.FixedLenFeature([], tf.string),  # one image  one record
+            'image/label': tf.FixedLenFeature([], tf.int64),
+            'image/roi': tf.FixedLenFeature([4], tf.float32),
+            'image/landmark': tf.FixedLenFeature([10], tf.float32)
+        }
+        image_features = tf.parse_single_example(serialized_example, features=feat_dict)
         image = tf.decode_raw(image_features['image/encoded'], tf.uint8)
         image = tf.reshape(image, [image_size, image_size, 3])
         image = (tf.cast(image, tf.float32) - 127.5) / 128.0
@@ -185,67 +200,53 @@ class TensorFlowDataset(object):
         label = tf.cast(image_features['image/label'], tf.float32)
         roi = tf.cast(image_features['image/roi'], tf.float32)
         landmark = tf.cast(image_features['image/landmark'], tf.float32)
-        image, label, roi, landmark = tf.train.batch(
-            [image, label, roi, landmark],
-            batch_size=batch_size,
-            num_threads=2,
-            capacity=1 * batch_size)
+        image, label, roi, landmark = tf.train.batch([image, label, roi, landmark],
+                                                     batch_size=batch_size, num_threads=12, capacity=1 * batch_size)
         label = tf.reshape(label, [batch_size])
         roi = tf.reshape(roi, [batch_size, 4])
         landmark = tf.reshape(landmark, [batch_size, 10])
-        return (image, label, roi, landmark)
+        return image, label, roi, landmark
 
-    def read_tensorflow_files(self, tensorflow_file_names, batch_sizes,
-                              image_size):
-        tensorflow_positive_file_name, tensorflow_part_file_name, tensorflow_negative_file_name, tensorflow_landmark_file_name = tensorflow_file_names
+    def read_tensorflow_files(self, tensorflow_file_names, batch_sizes, image_size):
+        tensorflow_positive_file_name, tensorflow_part_file_name, \
+            tensorflow_negative_file_name, tensorflow_landmark_file_name = tensorflow_file_names
         positive_batch_size, part_batch_size, negative_batch_size, landmark_batch_size = batch_sizes
 
-        positive_images, pos_label, pos_roi, pos_landmark = self.read_tensorflow_file(
-            tensorflow_positive_file_name, positive_batch_size, image_size)
-        part_images, part_label, part_roi, part_landmark = self.read_tensorflow_file(
-            tensorflow_part_file_name, part_batch_size, image_size)
-        neg_image, neg_label, neg_roi, neg_landmark = self.read_tensorflow_file(
-            tensorflow_negative_file_name, negative_batch_size, image_size)
-        landmark_image, landmark_label, landmark_roi, landmark_landmark = self.read_tensorflow_file(
-            tensorflow_landmark_file_name, landmark_batch_size, image_size)
+        positive_images, pos_label, pos_roi, pos_landmark = \
+            self.read_tensorflow_file(tensorflow_positive_file_name, positive_batch_size, image_size)
+        part_images, part_label, part_roi, part_landmark = \
+            self.read_tensorflow_file(tensorflow_part_file_name, part_batch_size, image_size)
+        neg_image, neg_label, neg_roi, neg_landmark = \
+            self.read_tensorflow_file(tensorflow_negative_file_name, negative_batch_size, image_size)
+        landmark_image, landmark_label, landmark_roi, landmark_landmark = \
+            self.read_tensorflow_file(tensorflow_landmark_file_name, landmark_batch_size, image_size)
 
-        images = tf.concat(
-            [positive_images, part_images, neg_image, landmark_image],
-            0,
-            name="concat/image")
-        labels = tf.concat([pos_label, part_label, neg_label, landmark_label],
-                           0,
-                           name="concat/label")
-        rois = tf.concat([pos_roi, part_roi, neg_roi, landmark_roi],
-                         0,
-                         name="concat/roi")
-        landmarks = tf.concat(
-            [pos_landmark, part_landmark, neg_landmark, landmark_landmark],
-            0,
-            name="concat/landmark")
-
-        return (images, labels, rois, landmarks)
+        images = tf.concat([positive_images, part_images, neg_image, landmark_image], 0, name="concat/image")
+        labels = tf.concat([pos_label, part_label, neg_label, landmark_label], 0, name="concat/label")
+        rois = tf.concat([pos_roi, part_roi, neg_roi, landmark_roi], 0, name="concat/roi")
+        landmarks = tf.concat([pos_landmark, part_landmark, neg_landmark, landmark_landmark], 0, name="concat/landmark")
+        return images, labels, rois, landmarks
 
     def generate(self, input_file_name, target_root_dir, target_name):
         tensorflow_dir = os.path.join(target_root_dir, 'tensorflow')
-        if (not os.path.exists(tensorflow_dir)):
-            os.makedirs(tensorflow_dir)
+        mef.create_dir_if_necessary(tensorflow_dir, raise_on_error=True)
 
-        tensorflow_filename = TensorFlowDataset.tensorflow_file_name(
-            tensorflow_dir, target_name)
-        if (not self._read_dataset(input_file_name)):
-            return (False)
+        tensorflow_filename = TensorFlowDataset.tensorflow_file_name(tensorflow_dir, target_name)
+        if not self._read_dataset(input_file_name):
+            return False
 
         total_number_of_samples = len(self._dataset)
         number_of_samples = 0
-        with tf.python_io.TFRecordWriter(
-                tensorflow_filename) as tfrecord_writer:
+        with tf.python_io.TFRecordWriter(tensorflow_filename) as tfrecord_writer:
+            pt = mef.ProgressText(len(self._dataset))
+
             for i, image_example in enumerate(self._dataset):
                 filename = image_example['filename']
                 self._add_to_tfrecord(filename, image_example, tfrecord_writer)
                 number_of_samples = number_of_samples + 1
-                if (number_of_samples % 10000 == 0):
-                    print('Processed ( %s / %s ) image samples.' %
-                          (number_of_samples, total_number_of_samples))
+                if number_of_samples % 10000 == 0:
+                    print(f"\rProcessed {number_of_samples} / {total_number_of_samples} image samples...")
 
-        return (True)
+                pt.update()
+
+        return True

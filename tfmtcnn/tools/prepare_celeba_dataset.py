@@ -40,13 +40,15 @@ import os
 import re
 import argparse
 
+import mef
+
 
 def prepare_dataset(bounding_box_file_name, landmark_file_name,
                     output_file_name):
-    if (not os.path.isfile(bounding_box_file_name)):
-        return (False)
-    if (not os.path.isfile(landmark_file_name)):
-        return (False)
+    if not os.path.isfile(bounding_box_file_name):
+        return False
+    if not os.path.isfile(landmark_file_name):
+        return False
 
     bounding_box_file = open(bounding_box_file_name, 'r')
     landmark_file = open(landmark_file_name, 'r')
@@ -55,8 +57,8 @@ def prepare_dataset(bounding_box_file_name, landmark_file_name,
     number_of_bounding_boxes = int(bounding_box_file.readline())
     number_of_landmarks = int(landmark_file.readline())
 
-    if (number_of_bounding_boxes != number_of_landmarks):
-        return (False)
+    if number_of_bounding_boxes != number_of_landmarks:
+        return False
 
     # Read bounding box file header.
     bounding_box_file.readline()
@@ -67,27 +69,31 @@ def prepare_dataset(bounding_box_file_name, landmark_file_name,
     bounding_boxes = bounding_box_file.readlines()
     landmarks = landmark_file.readlines()
 
-    if ((number_of_bounding_boxes != number_of_landmarks)
-            or (len(bounding_boxes) != len(landmarks))
-            or (len(bounding_boxes) != number_of_bounding_boxes)
-            or (number_of_bounding_boxes <= 0)):
-        return (False)
+    if number_of_bounding_boxes != number_of_landmarks or \
+            len(bounding_boxes) != len(landmarks) or \
+            len(bounding_boxes) != number_of_bounding_boxes or \
+            number_of_bounding_boxes <= 0:
+        return False
+
+    print(f"Extracting info and writing to {output_file_name}...")
+    pt = mef.ProgressText(len(bounding_boxes))
 
     for bounding_box, landmark in zip(bounding_boxes, landmarks):
         bounding_box_info = bounding_box.strip('\n').strip('\r')
+        # noinspection PyPep8
         bounding_box_info = re.sub('\s+', ' ', bounding_box_info)
         bounding_box_info = bounding_box_info.split(' ')
 
         landmark_info = landmark.strip('\n').strip('\r')
+        # noinspection PyPep8
         landmark_info = re.sub('\s+', ' ', landmark_info)
         landmark_info = landmark_info.split(' ')
 
         bounding_box_current_file_name = bounding_box_info[0]
         landmark_current_file_name = landmark_info[0]
 
-        if ((bounding_box_current_file_name != landmark_current_file_name)
-                or (len(bounding_box_info) != 5)
-                or (len(landmark_info) != 11)):
+        if bounding_box_current_file_name != landmark_current_file_name or \
+                len(bounding_box_info) != 5 or len(landmark_info) != 11:
             continue
 
         output_file.write(
@@ -100,7 +106,8 @@ def prepare_dataset(bounding_box_file_name, landmark_file_name,
                float(landmark_info[5]), float(landmark_info[6]),
                float(landmark_info[7]), float(landmark_info[8]),
                float(landmark_info[9]), float(landmark_info[10])))
-    return (True)
+        pt.update()
+    return True
 
 
 def parse_arguments(argv):
@@ -124,29 +131,28 @@ def parse_arguments(argv):
         help='Output file name where CelebA dataset file is saved.',
         default=None)
 
-    return (parser.parse_args(argv))
+    return parser.parse_args(argv)
 
 
 def main(args):
 
-    if (not args.bounding_box_file_name):
+    if not args.bounding_box_file_name:
         raise ValueError(
             'You must supply input CelebA dataset bounding box file name with --bounding_box_file_name.'
         )
 
-    if (not args.landmark_file_name):
+    if not args.landmark_file_name:
         raise ValueError(
             'You must supply input CelebA dataset landmark file name with --landmark_file_name.'
         )
 
-    if (not args.output_file_name):
+    if not args.output_file_name:
         raise ValueError(
             'You must supply output file name for storing CelebA dataset file with --output_file_name.'
         )
 
-    status = prepare_dataset(args.bounding_box_file_name,
-                             args.landmark_file_name, args.output_file_name)
-    if (status):
+    status = prepare_dataset(args.bounding_box_file_name, args.landmark_file_name, args.output_file_name)
+    if status:
         print('CelebA dataset is generated at ' + args.output_file_name)
     else:
         print('Error generating CelebA dataset.')

@@ -24,6 +24,13 @@ import numpy as np
 
 
 def py_nms(dets, thresh, mode="Union"):
+    if mode == "Union":
+        is_union = True
+    elif mode == "Minimum":
+        is_union = False
+    else:
+        raise ValueError("Mode must be Union or Minimum")
+
     x1 = dets[:, 0]
     y1 = dets[:, 1]
     x2 = dets[:, 2]
@@ -45,12 +52,12 @@ def py_nms(dets, thresh, mode="Union"):
         w = np.maximum(0.0, xx2 - xx1 + 1)
         h = np.maximum(0.0, yy2 - yy1 + 1)
         inter = w * h
-        if mode == "Union":
+        if is_union:
             ovr = inter / (areas[i] + areas[order[1:]] - inter)
-        elif mode == "Minimum":
+        else:       # is Minimum
             ovr = inter / np.minimum(areas[i], areas[order[1:]])
-        #keep
+        # keep
         inds = np.where(ovr <= thresh)[0]
         order = order[inds + 1]
 
-    return (keep)
+    return keep

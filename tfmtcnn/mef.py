@@ -37,7 +37,12 @@ def is_blank_string(s):
 
 def tsprint(*args, **kwargs):
     """ like print() but with a timestamp preceding each line... """
-    print("["+str(datetime.now())+"] " + " ".join(map(str, args)), **kwargs)
+    msg = " ".join(map(str, args))
+
+    if msg[0] == '\r':
+        print("\r["+str(datetime.now())+"] " + msg[1:], **kwargs)
+    else:
+        print("["+str(datetime.now())+"] " + msg, **kwargs)
 
 
 def time_str():
@@ -816,6 +821,8 @@ class ProgressText:
         self._newline_when_done = newline_when_done
         self._start_time = 0
         self._last_update = 0
+        self._msg = None
+        self._output = ""
         # self._elapsed_times = deque(maxlen=30)
         self._update_time_acc = AccBlend()
         self.reset(total=total, current=current, newline_when_done=newline_when_done)
@@ -840,20 +847,28 @@ class ProgressText:
         if clean:   # clean line first
             self.clean()
 
-        percent_done = self.percent_done()
-        if msg is None or msg == "":
-            print(f"\r{percent_done:-5.1f}% - {self.time_remaining()}", end='', flush=True)
-        else:
-            print(f"\r{msg} ({percent_done:-5.1f}% - {self.time_remaining()})", end='', flush=True)
+        self._msg = msg
+        self._update_output_str()
+        print(f"\r{self._output}", end='', flush=True)
 
-    def update_current_time(self, msg=""):
+    def get_message(self):
+        return self._msg
+
+    def get_output_string(self):
+        return self._output
+
+    def update_current_time(self, msg="", show=True):
         """
         Only update the current elapsed time and show the msg with new remaining time estimtate
         :return:
         """
         elapsed = time.time() - self._last_update
         self._update_time_acc.blend(elapsed, 0.9999)
-        self.show(msg)
+
+        if show:
+            self.show(msg)
+        else:
+            self._update_output_str()
 
     def time_remaining(self):
         # avg_update_time = sum(self._elapsed_times) / len(self._elapsed_times)
@@ -880,6 +895,13 @@ class ProgressText:
                 print("")
             # else:
             #     print("\r                                                   ")
+
+    def _update_output_str(self):
+        percent_done = self.percent_done()
+        if self._msg is None or self._msg == "":
+            self._output = f"{percent_done:-5.1f}% - {self.time_remaining()}"
+        else:
+            self._output = f"{self._msg} ({percent_done:-5.1f}% - {self.time_remaining()})"
 
 
 class AccBlend:

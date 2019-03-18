@@ -25,12 +25,12 @@ Usage:
 ```shell
 
 $ python tfmtcnn/tfmtcnn/generate_simple_dataset.py \
-	--annotation_image_dir ../data/WIDER_Face/WIDER_train/images \ 
-	--annotation_file_name ../data/WIDER_Face/WIDER_train/wider_face_train_bbx_gt.txt \
-	--landmark_image_dir ../data/CelebA/images \
-	--landmark_file_name ../data/CelebA/CelebA.txt \
-	--base_number_of_images 700000 \
-	--target_root_dir ../data/datasets/mtcnn 
+    --annotation_image_dir ../data/WIDER_Face/WIDER_train/images \
+    --annotation_file_name ../data/WIDER_Face/WIDER_train/wider_face_train_bbx_gt.txt \
+    --landmark_image_dir ../data/CelebA/images \
+    --landmark_file_name ../data/CelebA/CelebA.txt \
+    --base_number_of_images 700000 \
+    --target_root_dir ../data/datasets/mtcnn
 ```
 """
 
@@ -86,51 +86,44 @@ def parse_arguments(argv):
         'Output directory where output images and TensorFlow data files are saved.',
         default=None)
 
-    return (parser.parse_args(argv))
+    return parser.parse_args(argv)
 
 
 def main(args):
 
-    if (not args.annotation_image_dir):
-        raise ValueError(
-            'You must supply input WIDER face dataset training image directory with --annotation_image_dir.'
-        )
+    if not args.annotation_image_dir:
+        raise ValueError(f"You must supply input WIDER face dataset training "
+                         f"image directory with --annotation_image_dir.")
 
-    if (not args.annotation_file_name):
-        raise ValueError(
-            'You must supply input WIDER face dataset annotation file with --annotation_file_name.'
-        )
+    if not args.annotation_file_name:
+        raise ValueError(f"You must supply input WIDER face dataset annotation "
+                         f"file with --annotation_file_name.")
 
-    if (not args.landmark_image_dir):
-        raise ValueError(
-            'You must supply input landmark dataset training image directory with --landmark_image_dir.'
-        )
+    if not args.landmark_image_dir:
+        raise ValueError(f"You must supply input landmark dataset training image "
+                         f"directory with --landmark_image_dir.")
 
-    if (not args.landmark_file_name):
-        raise ValueError(
-            'You must supply input landmark dataset annotation file with --landmark_file_name.'
-        )
+    if not args.landmark_file_name:
+        raise ValueError(f"You must supply input landmark dataset annotation file "
+                         f"with --landmark_file_name.")
 
-    if (not args.target_root_dir):
-        raise ValueError(
-            'You must supply output directory for storing output images and TensorFlow data files with --target_root_dir.'
-        )
+    if not args.target_root_dir:
+        raise ValueError(f"You must supply output directory for storing output "
+                         f"images and TensorFlow data files with --target_root_dir.")
 
-    if (args.base_number_of_images < 1):
-        base_number_of_images = default_base_number_of_images
-    else:
-        base_number_of_images = args.base_number_of_images
+    base_number_of_images = default_base_number_of_images \
+        if args.base_number_of_images < 1 else args.base_number_of_images
 
     simple_dataset = SimpleDataset()
-    status = simple_dataset.generate(
-        args.annotation_image_dir, args.annotation_file_name,
-        args.landmark_image_dir, args.landmark_file_name,
-        base_number_of_images, args.target_root_dir)
-
-    if (status):
+    status = simple_dataset.generate_simple(args.annotation_image_dir, args.annotation_file_name,
+                                            args.landmark_image_dir, args.landmark_file_name,
+                                            base_number_of_images, args.target_root_dir)
+    if status:
         print('PNet dataset is generated at ' + args.target_root_dir)
     else:
-        print('Error generating PNet dataset.')
+        # print('Error generating PNet dataset.')
+        raise RuntimeError('Error generating PNet dataset.')
+
 
 
 if __name__ == '__main__':

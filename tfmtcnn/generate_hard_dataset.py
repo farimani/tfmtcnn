@@ -25,24 +25,24 @@ Usage:
 ```shell
 
 $ python tfmtcnn/tfmtcnn/generate_hard_dataset.py \
-	--network_name RNet \ 
-	--train_root_dir ../data/models/mtcnn/train \
-	--annotation_image_dir ../data/WIDER_Face/WIDER_train/images \ 
-	--annotation_file_name ../data/WIDER_Face/WIDER_train/wider_face_train_bbx_gt.txt \
-	--landmark_image_dir ../data/CelebA/images \
-	--landmark_file_name ../data/CelebA/CelebA.txt \
-	--base_number_of_images 700000 \
-	--target_root_dir ../data/datasets/mtcnn 
+    --network_name RNet \
+    --train_root_dir ../data/models/mtcnn/train \
+    --annotation_image_dir ../data/WIDER_Face/WIDER_train/images \
+    --annotation_file_name ../data/WIDER_Face/WIDER_train/wider_face_train_bbx_gt.txt \
+    --landmark_image_dir ../data/CelebA/images \
+    --landmark_file_name ../data/CelebA/CelebA.txt \
+    --base_number_of_images 700000 \
+    --target_root_dir ../data/datasets/mtcnn
 
 $ python tfmtcnn/tfmtcnn/generate_hard_dataset.py \
-	--network_name ONet \ 
-	--train_root_dir ../data/models/mtcnn/train \
-	--annotation_image_dir ../data/WIDER_Face/WIDER_train/images \ 
-	--annotation_file_name ../data/WIDER_Face/WIDER_train/wider_face_train_bbx_gt.txt \
-	--landmark_image_dir ../data/CelebA/images \
-	--landmark_file_name ../data/CelebA/CelebA.txt \
-	--base_number_of_images 700000 \
-	--target_root_dir ../data/datasets/mtcnn 
+    --network_name ONet \
+    --train_root_dir ../data/models/mtcnn/train \
+    --annotation_image_dir ../data/WIDER_Face/WIDER_train/images \
+    --annotation_file_name ../data/WIDER_Face/WIDER_train/wider_face_train_bbx_gt.txt \
+    --landmark_image_dir ../data/CelebA/images \
+    --landmark_file_name ../data/CelebA/CelebA.txt \
+    --base_number_of_images 700000 \
+    --target_root_dir ../data/datasets/mtcnn
 ```
 """
 
@@ -111,55 +111,42 @@ def parse_arguments(argv):
         'Output directory where output images and TensorFlow data files are saved.',
         default=None)
 
-    return (parser.parse_args(argv))
+    return parser.parse_args(argv)
 
 
 def main(args):
+    if not args.annotation_file_name:
+        raise ValueError(f"You must supply input WIDER face dataset annotations file with --annotation_file_name.")
 
-    if (not args.annotation_file_name):
-        raise ValueError(
-            'You must supply input WIDER face dataset annotations file with --annotation_file_name.'
-        )
+    if not args.annotation_image_dir:
+        raise ValueError(f"You must supply input WIDER face dataset training image directory "
+                         f"with --annotation_image_dir.")
 
-    if (not args.annotation_image_dir):
-        raise ValueError(
-            'You must supply input WIDER face dataset training image directory with --annotation_image_dir.'
-        )
+    if not args.landmark_image_dir:
+        raise ValueError(f"You must supply input landmark dataset training image directory with --landmark_image_dir.")
 
-    if (not args.landmark_image_dir):
-        raise ValueError(
-            'You must supply input landmark dataset training image directory with --landmark_image_dir.'
-        )
+    if not args.landmark_file_name:
+        raise ValueError(f"You must supply input landmark dataset annotation file with --landmark_file_name.")
 
-    if (not args.landmark_file_name):
-        raise ValueError(
-            'You must supply input landmark dataset annotation file with --landmark_file_name.'
-        )
+    if not args.target_root_dir:
+        raise ValueError(f"You must supply output directory for storing output images and TensorFlow data files "
+                         f"with --target_root_dir.")
 
-    if (not args.target_root_dir):
-        raise ValueError(
-            'You must supply output directory for storing output images and TensorFlow data files with --target_root_dir.'
-        )
+    if args.network_name not in ['RNet', 'ONet']:
+        raise ValueError(f"The network name should be either RNet or ONet.")
 
-    if (not (args.network_name in ['RNet', 'ONet'])):
-        raise ValueError('The network name should be either RNet or ONet.')
-
-    if (args.base_number_of_images < 1):
-        base_number_of_images = default_base_number_of_images
-    else:
-        base_number_of_images = args.base_number_of_images
+    base_number_of_images = default_base_number_of_images \
+        if args.base_number_of_images < 1 else args.base_number_of_images
 
     hard_dataset = HardDataset(args.network_name)
-    status = hard_dataset.generate(
-        args.annotation_image_dir, args.annotation_file_name,
-        args.landmark_image_dir, args.landmark_file_name, args.train_root_dir,
-        base_number_of_images, args.target_root_dir)
-
-    if (status):
-        print(args.network_name + ' network dataset is generated at ' +
-              args.target_root_dir)
+    status = hard_dataset.generate_hard(args.annotation_image_dir, args.annotation_file_name,
+                                        args.landmark_image_dir, args.landmark_file_name,
+                                        base_number_of_images, args.target_root_dir, args.train_root_dir)
+    if status:
+        print(f"{args.network_name} network dataset is generated at {args.target_root_dir}.")
     else:
-        print('Error generating hard dataset.')
+        # print('Error generating hard dataset.')
+        raise RuntimeError('Error generating hard dataset.')
 
 
 if __name__ == '__main__':

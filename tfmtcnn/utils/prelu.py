@@ -35,4 +35,4 @@ def prelu(inputs):
         initializer=tf.constant_initializer(0.25))
     pos = tf.nn.relu(inputs)
     neg = alphas * (inputs - abs(inputs)) * 0.5
-    return (pos + neg)
+    return pos + neg

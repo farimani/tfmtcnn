@@ -25,24 +25,24 @@ Usage:
 ```shell
 
 $ python tfmtcnn/tfmtcnn/evaluate_model.py \
-	--annotation_image_dir /datasets/WIDER_Face/WIDER_val/images \ 
-	--annotation_file_name /datasets/WIDER_Face/WIDER_val/wider_face_val_bbx_gt.txt
+    --annotation_image_dir /datasets/WIDER_Face/WIDER_val/images \
+    --annotation_file_name /datasets/WIDER_Face/WIDER_val/wider_face_val_bbx_gt.txt
 
 $ python tfmtcnn/tfmtcnn/evaluate_model.py \
-	--model_root_dir tfmtcnn/tfmtcnn/models/mtcnn/wider-celeba \
-	--annotation_image_dir /datasets/WIDER_Face/WIDER_val/images \ 
-	--annotation_file_name /datasets/WIDER_Face/WIDER_val/wider_face_val_bbx_gt.txt
+    --model_root_dir tfmtcnn/tfmtcnn/models/mtcnn/wider-celeba \
+    --annotation_image_dir /datasets/WIDER_Face/WIDER_val/images \
+    --annotation_file_name /datasets/WIDER_Face/WIDER_val/wider_face_val_bbx_gt.txt
 
 $ python tfmtcnn/tfmtcnn/evaluate_model.py \
-	--dataset_name FDDBDataset \
-	--annotation_image_dir /datasets/FDDB/ \ 
-	--annotation_file_name /datasets/FDDB/FDDB-folds/FDDB-fold-01-ellipseList.txt  
+    --dataset_name FDDBDataset \
+    --annotation_image_dir /datasets/FDDB/ \
+    --annotation_file_name /datasets/FDDB/FDDB-folds/FDDB-fold-01-ellipseList.txt
 
 $ python tfmtcnn/tfmtcnn/evaluate_model.py \
-	--model_root_dir tfmtcnn/tfmtcnn/models/mtcnn/wider-celeba \
-	--dataset_name FDDBDataset \
-	--annotation_image_dir /datasets/FDDB/ \ 
-	--annotation_file_name /datasets/FDDB/FDDB-folds/FDDB-fold-01-ellipseList.txt  
+    --model_root_dir tfmtcnn/tfmtcnn/models/mtcnn/wider-celeba \
+    --dataset_name FDDBDataset \
+    --annotation_image_dir /datasets/FDDB/ \
+    --annotation_file_name /datasets/FDDB/FDDB-folds/FDDB-fold-01-ellipseList.txt
 ```
 """
 
@@ -85,39 +85,34 @@ def parse_arguments(argv):
         help='Input face dataset image directory.',
         default=None)
 
-    return (parser.parse_args(argv))
+    return parser.parse_args(argv)
 
 
 def main(args):
 
-    if (not args.annotation_file_name):
-        raise ValueError(
-            'You must supply input face dataset annotations file with --annotation_file_name.'
-        )
+    if not args.annotation_file_name:
+        raise ValueError('You must supply input face dataset annotations file with --annotation_file_name.')
 
-    if (not args.annotation_image_dir):
-        raise ValueError(
-            'You must supply input face dataset training image directory with --annotation_image_dir.'
-        )
+    if not args.annotation_image_dir:
+        raise ValueError('You must supply input face dataset training image directory with --annotation_image_dir.')
 
     model_evaluator = ModelEvaluator()
-    status = model_evaluator.load(args.dataset_name, args.annotation_image_dir,
-                                  args.annotation_file_name)
-    if (not status):
+    status = model_evaluator.load(args.dataset_name, args.annotation_image_dir, args.annotation_file_name)
+    if not status:
         print('Error loading the test dataset.')
 
-    if (args.model_root_dir):
+    if args.model_root_dir:
         model_root_dir = args.model_root_dir
     else:
         model_root_dir = NetworkFactory.model_deploy_dir()
 
     last_network = 'ONet'
     status = model_evaluator.create_detector(last_network, model_root_dir)
-    if (not status):
+    if not status:
         print('Error creating the face detector.')
 
     status = model_evaluator.evaluate(print_result=True)
-    if (not status):
+    if not status:
         print('Error evaluating the model')
 
 

@@ -25,6 +25,7 @@ from __future__ import division
 from __future__ import print_function
 
 import cv2
+import numpy as np
 
 
 class InferenceBatch(object):
@@ -43,34 +44,34 @@ class InferenceBatch(object):
 
     def reset(self):
         self.current = 0
-        if (self.shuffle):
+        if self.shuffle:
             np.random.shuffle(self.images)
 
     def has_next(self):
-        return (self.current + self.batch_size <= self.size)
+        return self.current + self.batch_size <= self.size
 
     def __iter__(self):
-        return (self)
+        return self
 
     def __next__(self):
-        return (self.next())
+        return self.next()
 
     def next(self):
-        if (self.has_next()):
+        if self.has_next():
             self.get_batch()
             self.current += self.batch_size
-            return (self.data)
+            return self.data
         else:
             raise StopIteration
 
     def getindex(self):
-        return (self.current / self.batch_size)
+        return self.current / self.batch_size
 
     def getpad(self):
-        if (self.current + self.batch_size > self.size):
-            return (self.current + self.batch_size - self.size)
+        if self.current + self.batch_size > self.size:
+            return self.current + self.batch_size - self.size
         else:
-            return (0)
+            return 0
 
     def get_batch(self):
         image_path = self.images[self.current]
@@ -78,4 +79,4 @@ class InferenceBatch(object):
 
         input_rgb_image = cv2.cvtColor(input_bgr_image, cv2.COLOR_BGR2RGB)
         self.data = input_rgb_image
-        #self.data = input_bgr_image
+        # self.data = input_bgr_image
