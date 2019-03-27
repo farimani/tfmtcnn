@@ -6,7 +6,7 @@
 # Mehran's handy tensorflow helpers.
 #
 # Created by mehran on 01 / 30 / 19.
-# Copyright © 2018 Percipo Inc. All rights reserved.
+# Copyright © 2019 Percipo Inc. All rights reserved.
 #
 #######################################################################################
 

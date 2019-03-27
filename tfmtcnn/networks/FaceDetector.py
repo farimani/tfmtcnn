@@ -42,6 +42,7 @@ from tfmtcnn.networks.NetworkFactory import NetworkFactory
 
 import mef
 
+
 class FaceDetector(object):
     def __init__(self, last_network='ONet', model_root_dir=None):
         if not model_root_dir:
@@ -121,8 +122,7 @@ class FaceDetector(object):
         height, width, channels = image.shape
         new_height = int(height * scale)
         new_width = int(width * scale)
-        new_shape = (new_width, new_height)
-        resized_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_LINEAR)
+        resized_image = mef.resize_image(image, new_width, new_height)
         resized_image = (resized_image - 127.5) / 128
         return resized_image
 
@@ -132,7 +132,7 @@ class FaceDetector(object):
         num_box = bboxes.shape[0]
 
         dx, dy = np.zeros((num_box, )), np.zeros((num_box, ))
-        edx, edy = tmpw.copy() - 1, tmph.copy() - 1
+        edx, edy = tmpw.copy() - 1, tmph.copy() - 1     # MEF: Why copy here?
 
         x, y, ex, ey = bboxes[:, 0], bboxes[:, 1], bboxes[:, 2], bboxes[:, 3]
 
@@ -227,7 +227,8 @@ class FaceDetector(object):
         for i in range(num_boxes):
             tmp = np.zeros((tmph[i], tmpw[i], 3), dtype=np.uint8)
             tmp[dy[i]:edy[i] + 1, dx[i]:edx[i] + 1, :] = im[y[i]:ey[i] + 1, x[i]:ex[i] + 1, :]
-            cropped_ims[i, :, :, :] = (cv2.resize(tmp, (24, 24)) - 127.5) / 128
+            cropped_ims[i, :, :, :] = (mef.resize_image(tmp, 24, 24) - 127.5) / 128
+
         cls_scores, reg, _ = self._rnet.detect(cropped_ims)
         cls_scores = cls_scores[:, 1]
         keep_inds = np.where(cls_scores > self._threshold[1])[0]
@@ -244,7 +245,7 @@ class FaceDetector(object):
         boxes_c = self._calibrate_box(boxes, reg[keep])
         return boxes, boxes_c, None
 
-    def _outpute_faces(self, im, dets):
+    def _output_faces(self, im, dets):
         h, w, c = im.shape
         dets = convert_to_square(dets)
         dets[:, 0:4] = np.round(dets[:, 0:4])
@@ -253,9 +254,8 @@ class FaceDetector(object):
         cropped_ims = np.zeros((num_boxes, 48, 48, 3), dtype=np.float32)
         for i in range(num_boxes):
             tmp = np.zeros((tmph[i], tmpw[i], 3), dtype=np.uint8)
-            tmp[dy[i]:edy[i] + 1, dx[i]:edx[i] +
-                1, :] = im[y[i]:ey[i] + 1, x[i]:ex[i] + 1, :]
-            cropped_ims[i, :, :, :] = (cv2.resize(tmp, (48, 48)) - 127.5) / 128
+            tmp[dy[i]:edy[i] + 1, dx[i]:edx[i] + 1, :] = im[y[i]:ey[i] + 1, x[i]:ex[i] + 1, :]
+            cropped_ims[i, :, :, :] = (mef.resize_image(tmp, 48, 48) - 127.5) / 128
 
         cls_scores, reg, landmark = self._onet.detect(cropped_ims)
         cls_scores = cls_scores[:, 1]
@@ -308,7 +308,7 @@ class FaceDetector(object):
 
         start_time = time.time()
         if self._onet:
-            boxes, boxes_c, landmark = self._outpute_faces(image, boxes_c)
+            boxes, boxes_c, landmark = self._output_faces(image, boxes_c)
             if boxes_c is None:
                 return np.array([]), np.array([])
             onet_time = time.time() - start_time
@@ -332,7 +332,6 @@ class FaceDetector(object):
         return all_boxes_c, all_landmarks
 
     def evaluate_dataset(self, test_dataset, print_result=False):
-
         test_data = InferenceBatch(test_dataset['images'])
         detected_boxes, landmarks = self.detect_face(test_data)
 
@@ -343,52 +342,42 @@ class FaceDetector(object):
         if len(detected_boxes) != number_of_images:
             return False
 
-        number_of_positive_faces = 0
-        number_of_part_faces = 0
-        number_of_ground_truth_faces = 0
-        accuracy = 0.0
-        for image_file_path, detected_box, ground_truth_box in zip(
-                image_file_names, detected_boxes, ground_truth_boxes):
-            ground_truth_box = np.array(
-                ground_truth_box, dtype=np.float32).reshape(-1, 4)
-            number_of_ground_truth_faces = number_of_ground_truth_faces + len(
-                ground_truth_box)
-            if detected_box.shape[0] == 0:
+        n_pos = n_part =  n_labeled = n_dets = 0
+        iou_sum = 0.0
+        for i, image_file_path in enumerate(image_file_names):
+            dets, bboxes = detected_boxes[i], ground_truth_boxes[i]
+            bboxes = np.array(bboxes, dtype=np.float32).reshape(-1, 4)
+            n_labeled += len(bboxes)
+            if dets.shape[0] == 0:
                 continue
 
-            detected_box = convert_to_square(detected_box)
-            detected_box[:, 0:4] = np.round(detected_box[:, 0:4])
-
+            n_dets += len(dets)
+            dets_square = convert_to_square(dets)
+            dets_square[:, 0:4] = np.round(dets_square[:, 0:4])
             current_image = cv2.imread(image_file_path)
+            img_height, img_width, _ = current_image.shape
 
-            for box in detected_box:
-                x_left, y_top, x_right, y_bottom, _ = box.astype(int)
-                # width = x_right - x_left + 1
-                # height = y_bottom - y_top + 1
-
-                if ((x_left < 0) or (y_top < 0)
-                        or (x_right > (current_image.shape[1] - 1))
-                        or (y_bottom > (current_image.shape[0] - 1))):
+            for det in dets:
+                x_left, y_top, x_right, y_bottom, _ = det.astype(int)
+                if x_left < 0 or y_top < 0 or x_right > img_width or y_bottom > img_height:
                     continue
 
-                current_iou = iou(box, ground_truth_box)
-                maximum_iou = np.max(current_iou)
-
-                accuracy = accuracy + maximum_iou
-                if maximum_iou > datasets_constants.positive_iou:
-                    number_of_positive_faces = number_of_positive_faces + 1
-                elif maximum_iou > datasets_constants.part_iou:
-                    number_of_part_faces = number_of_part_faces + 1
+                maximum_iou = np.max(iou(det, bboxes))
+                iou_sum += maximum_iou
+                if maximum_iou >= datasets_constants.positive_iou:
+                    n_pos += 1
+                elif maximum_iou >= datasets_constants.part_iou:
+                    n_part += 1
 
         if print_result:
-            print('Positive faces       - ', number_of_positive_faces)
-            print('Partial faces        - ', number_of_part_faces)
-            print('Total detected faces - ', (number_of_positive_faces + number_of_part_faces))
-            print('Ground truth faces   - ', number_of_ground_truth_faces)
-            print('Positive accuracy    - ', number_of_positive_faces / number_of_ground_truth_faces)
-            print('Detection accuracy   - ',
-                  (number_of_positive_faces + number_of_part_faces) / number_of_ground_truth_faces)
-            print('Accuracy             - ', accuracy / number_of_ground_truth_faces)
+            print(f"Positive faces       - {n_pos}")
+            print(f"Partial faces        - {n_part}")
+            print(f"Total detected faces - {n_pos + n_part}")
+            print(f"Ground truth faces   - {n_labeled}")
+            print(f"Total Detections     - {n_dets}")
+            print(f"Positives DR         - {n_pos / n_labeled}")
+            print(f"Positives + Part DR  - {(n_pos+n_part)/n_labeled} ")
+            print(f"Average IOU          - {iou_sum / n_labeled}")
 
         return True
 

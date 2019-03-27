@@ -48,18 +48,19 @@ import mef
 
 
 class LandmarkDataset(object):
-
-    __landmark_ratio = datasets_constants.landmark_ratio
-
     def __init__(self, name='Landmark'):
         self._name = name
         self._is_valid = False
         self._data = {}
+
+        # MEF: Avoid checking on directory existence for every image write by keeping track...
+        self._dirs_set = set()
         self._clear()
 
     def _clear(self):
         self._is_valid = False
         self._data = {}
+        self._dirs_set = set()
 
     @classmethod
     def landmark_file_name(cls, target_root_dir):
@@ -87,24 +88,55 @@ class LandmarkDataset(object):
     def _can_generate_sample():
         return random.choice([0, 1, 2, 3]) > 1
 
+    def _make_image_fname(self, root_dir, target_size, counter, prefix, ext):
+        """ Avoids super large directories by putting a max number of files per directory.
+            It creates the directory if needed.
+        """
+        max_files_per_dir = 3000
+        dirpath = os.path.join(root_dir, f"{target_size}x{target_size}", f"dir{counter // max_files_per_dir}")
+
+        if dirpath not in self._dirs_set:
+            mef.create_dir_if_necessary(dirpath)
+            self._dirs_set.add(dirpath)
+
+        fname = os.path.join(dirpath, f"{prefix}-{counter}.{ext}")
+        return fname
+
+    def _resize_and_save(self, root_dir, image, target_size, counter, prefix):
+        fname = self._make_image_fname(root_dir, target_size, counter, prefix, "jpg")
+        resized = mef.resize_image(image, target_size, target_size)
+        cv2.imwrite(fname, resized)
+
+        # other_sizes = [x for x in [12, 24, 48] if x != target_size]
+        # for size in other_sizes:
+        #     fn = self._make_image_fname(root_dir, size, counter, prefix, "jpg")
+        #     cv2.imwrite(fn, mef.resize_image(image, size, size))
+
+        return fname
+
     def generate(self, landmark_image_dir, landmark_file_name, base_number_of_images,
                  target_face_size, target_root_dir):
         if not self._read(landmark_image_dir, landmark_file_name):
             return False
 
+        # MEF: CelebA has one markup per image.
+        #      Also, note that the bounding boxes are generated such that right and bottom are passed
+        #      the width and height. i.e. right = left + width.
+        #
         image_file_names = self._data['images']
-        ground_truth_boxes = self._data['bboxes']
-        ground_truth_landmarks = self._data['landmarks']
+        gt_bboxes = self._data['bboxes']
+        gt_landmarks = self._data['landmarks']
+
+        assert len(image_file_names) == len(gt_bboxes) == len(gt_landmarks), "Inconsistent landmark data."
 
         landmark_dir = os.path.join(target_root_dir, 'landmark')
         mef.create_dir_if_necessary(landmark_dir, raise_on_error=True)
 
         landmark_file = open(LandmarkDataset.landmark_file_name(target_root_dir), 'w')
 
-        generated_landmark_images = 0
-        processed_input_images = 0
+        processed_input_images = generated_landmark_images = 0
         total_number_of_input_images = len(image_file_names)
-        needed_landmark_samples = int((1.0 * base_number_of_images * LandmarkDataset.__landmark_ratio) /
+        needed_landmark_samples = int((base_number_of_images * datasets_constants.landmark_parts) /
                                       total_number_of_input_images)
         needed_landmark_samples = max(1, needed_landmark_samples)
         base_number_of_attempts = 500
@@ -112,8 +144,12 @@ class LandmarkDataset(object):
 
         pt = mef.ProgressText(len(image_file_names))
 
-        for image_path, ground_truth_bounding_box, ground_truth_landmark in \
-                zip(image_file_names, ground_truth_boxes, ground_truth_landmarks):
+        for i, image_path in enumerate(image_file_names):
+            bbox = gt_bboxes[i]                         # MEF: one markup per image
+            landmarks = gt_landmarks[i]
+
+            assert len(landmarks) == 5, "Expect 5 landmark points."
+
             image_path = image_path.replace("\\", '/')
             image = cv2.imread(image_path)
             if image is None:
@@ -121,46 +157,31 @@ class LandmarkDataset(object):
                 pt.update_current_time()
                 continue
 
-            image_height, image_width, image_channels = image.shape
-            gt_box = np.array([
-                ground_truth_bounding_box.left, ground_truth_bounding_box.top,
-                ground_truth_bounding_box.right,
-                ground_truth_bounding_box.bottom
-            ])
+            image_height, image_width, _ = image.shape
 
-            if gt_box[0] < 0 or gt_box[1] < 0 or gt_box[2] >= image_width or gt_box[3] >= image_height:
+            # MEF: bbox right/bottom are inclusive
+            if bbox.left < 0 or bbox.top < 0 or bbox.right >= image_width or bbox.bottom >= image_height:
                 pt.update_current_time()
                 continue
 
-            gt_width, gt_height = gt_box[2]-gt_box[0]+1, gt_box[3]-gt_box[1]+1
-            current_face_images = []
-            current_face_landmarks = []
-            f_face = image[ground_truth_bounding_box.
-                           top:ground_truth_bounding_box.bottom +
-                           1, ground_truth_bounding_box.
-                           left:ground_truth_bounding_box.right + 1]
-            f_face = cv2.resize(f_face, (target_face_size, target_face_size))
-            landmark = np.zeros((5, 2))
+            gt_box = np.array([bbox.left, bbox.top, bbox.right, bbox.bottom])
+            gt_width, gt_height = bbox.w, bbox.h
 
-            for index, one in enumerate(ground_truth_landmark):
-                # MEF: wrong width/height by 1
-                # landmark_point = ((one[0] - gt_box[0]) / (gt_box[2] - gt_box[0]),
-                #                   (one[1] - gt_box[1]) / (gt_box[3] - gt_box[1]))
-                landmark_point = ((one[0] - gt_box[0]) / gt_width,
-                                  (one[1] - gt_box[1]) / gt_height)
-                landmark[index] = landmark_point
+            current_face_images, current_face_landmarks = [], []
+            f_face = image[bbox.top:bbox.bottom+1, bbox.left:bbox.right+1]
+            landmarks_norm = np.zeros((5, 2))       # MEF: Normalized landmarks
+
+            for index, one in enumerate(landmarks):
+                landmarks_norm[index] = ((one[0] - gt_box[0]) / gt_width, (one[1] - gt_box[1]) / gt_height)
 
             current_face_images.append(f_face)
-            current_face_landmarks.append(landmark.reshape(10))
-            landmark = np.zeros((5, 2))
-            current_landmark_samples = 0
-            number_of_attempts = 0
+            current_face_landmarks.append(landmarks_norm.reshape(10))
+
+            current_landmark_samples = number_of_attempts = 0
             while current_landmark_samples < needed_landmark_samples and number_of_attempts < maximum_attempts:
                 number_of_attempts += 1
-
-                # MEF: See generate_simple_samples() for comments on why we change the below. In general, the loop
-                # can be improved quite a bit further...
-
+                # MEF: See generate_simple_samples() for comments on why we change the below.
+                #
                 # bounding_box_size = npr.randint(int(min(ground_truth_width, ground_truth_height) * 0.8),
                 #                                 np.ceil(1.25 * max(ground_truth_width, ground_truth_height)))
                 bb_w = npr.randint(int(gt_width * 0.8), np.ceil(gt_width * 1.25))
@@ -170,106 +191,103 @@ class LandmarkDataset(object):
                 delta_y = npr.randint(-gt_height, gt_height) * 0.2
                 nx1 = int(max(gt_box[0] + gt_width / 2 - bb_w / 2 + delta_x, 0))
                 ny1 = int(max(gt_box[1] + gt_height / 2 - bb_h / 2 + delta_y, 0))
-                nx2, ny2 = nx1 + bb_w, ny1 + bb_h
+                nx2, ny2 = nx1 + bb_w - 1, ny1 + bb_h - 1
 
-                if nx2 > image_width or ny2 > image_height:
+                if nx2 >= image_width or ny2 >= image_height:
                     pt.update_current_time()
                     continue
 
                 crop_box = np.array([nx1, ny1, nx2, ny2])
                 nx1, ny1, nx2, ny2 = convert_to_square(crop_box.reshape(1, -1))[0]  # now convert to square
 
-                if nx1 < 0 or ny1 < 0 or nx2 > image_width or ny2 > image_height:  # out of bounds?
+                if nx1 < 0 or ny1 < 0 or nx2 >= image_width or ny2 >= image_height:  # out of bounds?
                     pt.update_current_time()
                     continue
 
+                # MEF: Note that celeba is only used for landmark localization, not class training. So we only
+                #      look at the positive crops here...
+                #
                 current_iou = iou(crop_box, np.expand_dims(gt_box, 0))
-
                 if current_iou < DatasetFactory.positive_iou():
                     pt.update_current_time()
                     continue
 
-                bb_size = nx2 - nx1 + 1
-                # MEF: TODO: Check: Cropping here adds 1 vs. the one in simple samples.
-                cropped_im = image[ny1:ny2 + 1, nx1:nx2 + 1, :]
-                resized_im = cv2.resize(cropped_im, (target_face_size, target_face_size))
+                crop_size = nx2 - nx1 + 1
+                cropped_im = image[ny1:ny2+1, nx1:nx2+1, :]
 
-                for index, one in enumerate(ground_truth_landmark):
-                    landmark_point = ((one[0] - nx1) / bb_size, (one[1] - ny1) / bb_size)
-                    landmark[index] = landmark_point
+                if len(landmarks) != 5:
+                    print("here")
 
-                current_face_images.append(resized_im)
-                current_face_landmarks.append(landmark.reshape(10))
-                landmark = np.zeros((5, 2))
+                # assert len(landmarks) == 5
+
+                for index, one in enumerate(landmarks):
+                    landmarks_norm[index] = ((one[0] - nx1) / crop_size, (one[1] - ny1) / crop_size)
+
+                current_face_images.append(cropped_im)
+                current_face_landmarks.append(landmarks_norm.reshape(10))
                 landmark_ = current_face_landmarks[-1].reshape(-1, 2)
                 bounding_box = BBox([nx1, ny1, nx2, ny2])
 
                 # mirror
                 if self._can_generate_sample():
-                    face_flipped, landmark_flipped = flip(resized_im, landmark_)
-                    face_flipped = cv2.resize(face_flipped, (target_face_size, target_face_size))
+                    face_flipped, landmark_flipped = flip(cropped_im, landmark_)
                     # c*h*w
                     current_face_images.append(face_flipped)
                     current_face_landmarks.append(landmark_flipped.reshape(10))
 
                 # rotate
                 if self._can_generate_sample():
-                    face_rotated_by_alpha, landmark_rotated = rotate(image, bounding_box,
-                                                                     bounding_box.reproject_landmark(landmark_), 5)
+                    face_rotated, landmark_rotated = rotate(image, bounding_box,
+                                                            bounding_box.reproject_landmark(landmark_), 5)
                     # landmark_offset
                     landmark_rotated = bounding_box.project_landmark(landmark_rotated)
-                    face_rotated_by_alpha = cv2.resize(face_rotated_by_alpha, (target_face_size, target_face_size))
-                    current_face_images.append(face_rotated_by_alpha)
+                    current_face_images.append(face_rotated)
                     current_face_landmarks.append(landmark_rotated.reshape(10))
 
                     # flip
-                    face_flipped, landmark_flipped = flip(face_rotated_by_alpha, landmark_rotated)
-                    face_flipped = cv2.resize(face_flipped, (target_face_size, target_face_size))
+                    face_flipped, landmark_flipped = flip(face_rotated, landmark_rotated)
                     current_face_images.append(face_flipped)
                     current_face_landmarks.append(landmark_flipped.reshape(10))
 
                 # inverse clockwise rotation
                 if self._can_generate_sample():
-                    face_rotated_by_alpha, landmark_rotated = rotate(image, bounding_box,
-                                                                     bounding_box.reproject_landmark(landmark_), -5)
+                    face_rotated, landmark_rotated = rotate(image, bounding_box,
+                                                            bounding_box.reproject_landmark(landmark_), -5)
                     landmark_rotated = bounding_box.project_landmark(landmark_rotated)
-                    face_rotated_by_alpha = cv2.resize(face_rotated_by_alpha, (target_face_size, target_face_size))
-                    current_face_images.append(face_rotated_by_alpha)
+                    current_face_images.append(face_rotated)
                     current_face_landmarks.append(landmark_rotated.reshape(10))
 
-                    face_flipped, landmark_flipped = flip(face_rotated_by_alpha, landmark_rotated)
-                    face_flipped = cv2.resize(face_flipped, (target_face_size, target_face_size))
+                    face_flipped, landmark_flipped = flip(face_rotated, landmark_rotated)
                     current_face_images.append(face_flipped)
                     current_face_landmarks.append(landmark_flipped.reshape(10))
 
-                current_image_array, current_landmark_array = np.asarray(current_face_images), \
-                    np.asarray(current_face_landmarks)
+                current_image_array = np.asarray(current_face_images)
+                current_landmark_array = np.asarray(current_face_landmarks)
 
-                for i in range(len(current_image_array)):
+                for j, img in enumerate(current_image_array):
+                    if current_landmark_samples >= needed_landmark_samples:
+                        break
+
                     # MEF: Why this check for landmarks falling within box?
                     # if np.sum(np.where(current_landmark_array[i] <= 0, 1, 0)) > 0 or \
                     #         np.sum(np.where(current_landmark_array[i] >= 1, 1, 0)) > 0:
                     #     pt.update_current_time()
                     #     continue
 
-                    if current_landmark_samples < needed_landmark_samples:
-                        cv2.imwrite(join(landmark_dir, f"{generated_landmark_images}.jpg"), current_image_array[i])
-                        # landmarks = map(str, list(current_landmark_array[i]))
-                        landmarks = [str(x) for x in list(current_landmark_array[i])]
-                        landmark_file.write(join(landmark_dir, f"{generated_landmark_images}.jpg") + " -2 " +
-                                            " ".join(landmarks) + "\n")
-                        generated_landmark_images += 1
-                        current_landmark_samples += 1
-                    else:
-                        break
+                    cv2.imwrite(join(landmark_dir, f"{generated_landmark_images}.jpg"), img)
+                    fname = self._resize_and_save(landmark_dir, img, target_face_size, generated_landmark_images, "lm")
+                    landmarks = [str(x) for x in list(current_landmark_array[i])]
+                    landmark_file.write(fname + " -2 " + " ".join(landmarks) + "\n")
+                    generated_landmark_images += 1
+                    current_landmark_samples += 1
 
-                # MEF: Reset the current_xxx arrays here so we dont go over them again!
+                # MEF: Reset the current_xxx arrays here so we don't go over them again!
                 current_face_images = []
                 current_face_landmarks = []
 
             processed_input_images = processed_input_images + 1
             if processed_input_images % 5000 == 0:
-                print(f"\r{processed_input_images} / {total_number_of_input_images} images processed...")
+                mef.tsprint(f"\r{processed_input_images} / {total_number_of_input_images} images processed...")
             pt.update()
 
         landmark_file.close()

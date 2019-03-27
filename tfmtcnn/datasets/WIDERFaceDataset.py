@@ -65,17 +65,15 @@ class WIDERFaceDataset(object):
     def number_of_faces(self):
         return self._number_of_faces
 
-    def read(self, annotation_image_dir, annotation_file_name):
+    def read(self, annotation_image_dir, annotation_file_name, min_size=datasets_constants.minimum_dataset_face_size):
         self._clear()
 
         if not mef.isfile(annotation_file_name):
             return False
 
-        images = []
-        bounding_boxes = []
+        images, bounding_boxes = [], []
         annotation_file = open(annotation_file_name, 'r')
-
-        mef.tsprint(f"Reading images in annotation file {annotation_file_name}...")
+        mef.tsprint(f"Reading images in WIDER Face annotation file {annotation_file_name}...")
         pt = mef.ProgressText(mef.get_line_count(annotation_file_name))
 
         while True:
@@ -85,8 +83,6 @@ class WIDERFaceDataset(object):
 
             image_path = os.path.join(annotation_image_dir, image_path)
             imwidth, imheight = mef.get_image_size(image_path)
-            # image = cv2.imread(image_path)
-            # if (image is None):
             if imwidth <= 0 or imheight <= 0:
                 print(f"WARNING: Could not parse image {image_path}. Skipping...")
                 # continue            # MEF: Finish reading it's meta. Don't jump here!
@@ -98,15 +94,11 @@ class WIDERFaceDataset(object):
 
                 # if image is not None:
                 if imwidth > 0 and imheight > 0:
-                    xmin = float(bounding_box_info[0])
-                    ymin = float(bounding_box_info[1])
-                    width = float(bounding_box_info[2])
-                    height = float(bounding_box_info[3])
+                    xmin, ymin = int(bounding_box_info[0]), int(bounding_box_info[1])
+                    width, height = int(bounding_box_info[2]), int(bounding_box_info[3])
+                    xmax, ymax = xmin + width - 1, ymin + height - 1
 
-                    xmax = xmin + width
-                    ymax = ymin + height
-
-                    if max(width, height) >= WIDERFaceDataset.minimum_face_size() and width > 0 and height > 0:
+                    if max(width, height) >= min_size and width > 0 and height > 0:
                         one_image_boxes.append([xmin, ymin, xmax, ymax])
 
             if len(one_image_boxes):

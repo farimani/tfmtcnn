@@ -31,6 +31,8 @@ import numpy as np
 import tfmtcnn.datasets.constants as datasets_constants
 from tfmtcnn.utils.BBox import BBox
 
+import mef
+
 
 class CelebADataset(object):
 
@@ -68,12 +70,14 @@ class CelebADataset(object):
         if not os.path.isfile(landmark_file_name):
             return False
 
-        images = []
-        bounding_boxes = []
-        landmarks = []
+        images, bounding_boxes, landmarks = [], [], []
         landmark_file = open(landmark_file_name, 'r')
+        mef.tsprint(f"Reading images in CelebA landmark file {landmark_file_name}...")
+        pt = mef.ProgressText(mef.get_line_count(landmark_file_name))
+        lc = 0
         while True:
             line = landmark_file.readline().strip()
+            lc += 1
             landmark_data = line.split(' ')
             image_path = landmark_data[0]
             if not image_path:
@@ -81,29 +85,25 @@ class CelebADataset(object):
             else:
                 image_path = os.path.join(landmark_image_dir, landmark_data[0])
 
-            image_left = float(landmark_data[1])
-            image_top = float(landmark_data[2])
-            image_width = float(landmark_data[3])
-            image_height = float(landmark_data[4])
+            bbox_left, bbox_top = int(landmark_data[1]), int(landmark_data[2])
+            bbox_width, bbox_height = int(landmark_data[3]), int(landmark_data[4])
 
-            image_right = image_left + image_width
-            image_bottom = image_top + image_height
+            if max(bbox_width, bbox_height) < CelebADataset.minimum_face_size():
+                print(f"NOTE: Line {lc} in file {landmark_file_name}: Bounding box too small. Skpping.")
+                continue
 
-            bounding_box = (int(image_left), int(image_top), int(image_right), int(image_bottom))
-            # bounding_box = (image_left, image_top, image_right, image_bottom)
-            # bounding_box = map(int, bounding_box)
-
+            bbox = (bbox_left, bbox_top, bbox_left + bbox_width - 1, bbox_top + bbox_height - 1)
             landmark = np.zeros((5, 2))
             for index in range(0, 5):
                 landmark_point = (float(landmark_data[5 + 2 * index]), float(landmark_data[5 + 2 * index + 1]))
                 landmark[index] = landmark_point
 
-            if max(image_width, image_height) >= CelebADataset.minimum_face_size() and \
-                    image_width > 0 and image_height > 0:
-                images.append(image_path)
-                bounding_boxes.append(BBox(bounding_box))
-                landmarks.append(landmark)
-                self._number_of_faces += 1
+            images.append(image_path)
+            bounding_boxes.append(BBox(bbox))
+            landmarks.append(landmark)
+            self._number_of_faces += 1
+
+            pt.update()
 
         if len(images):
             self._data['images'] = images

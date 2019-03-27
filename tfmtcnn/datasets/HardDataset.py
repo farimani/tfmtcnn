@@ -41,6 +41,7 @@ from tfmtcnn.networks.NetworkFactory import NetworkFactory
 
 import mef
 
+
 class HardDataset(SimpleDataset):
     def __init__(self, name):
         SimpleDataset.__init__(self, name)

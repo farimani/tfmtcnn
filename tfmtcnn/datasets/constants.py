@@ -24,15 +24,22 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-positive_ratio = 1
-part_ratio = 1
-negative_ratio = 3
+# MEF: For training set mix, 3:1:1:2 per the allocation used in the paper.
+#
+negative_parts = 3
+positive_parts = 1
+partial_parts = 1
+landmark_parts = 2
 
-landmark_ratio = 2
+# MEF: Ratio of negatives that have overlap with a bounding box. The ratio that was originally used in the code
+#      here comes to about 0.35.
+# negatives_from_bbox_ratio = 0.35
+negatives_from_bbox_ratio = 0.25
 
 positive_iou = 0.65
 part_iou = 0.40
 negative_iou = 0.30
+abs_negative_iou = 0.1     # MEF: overlap of this much or less means a negative with very little or no face part.
 
 default_base_number_of_images = 700000
 

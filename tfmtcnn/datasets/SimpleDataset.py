@@ -25,7 +25,6 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import numpy as np
 
 from tfmtcnn.datasets.AbstractDataset import AbstractDataset
 from tfmtcnn.datasets.LandmarkDataset import LandmarkDataset
@@ -54,6 +53,8 @@ class SimpleDataset(AbstractDataset):
                                                     NetworkFactory.network_size(self.network_name()), target_root_dir)
 
     def _generate_image_list(self, target_root_dir):
+        # MEF: Basically a cat of the files below ...
+        #
         image_list_file = open(self._image_list_file_name(target_root_dir), 'w')
 
         files = (("positive", SimpleFaceDataset.positive_file_name(target_root_dir)),
@@ -73,7 +74,7 @@ class SimpleDataset(AbstractDataset):
         print("")
         return True
 
-    def _generate_dataset(self, target_root_dir):
+    def _generate_tf_dataset(self, target_root_dir):
         tensorflow_dataset = TensorFlowDataset()
         if not tensorflow_dataset.generate(self._image_list_file_name(target_root_dir), target_root_dir, 'image_list'):
             return False
@@ -113,7 +114,7 @@ class SimpleDataset(AbstractDataset):
         print('Generated image lists.')
 
         print('Generating TensorFlow dataset.')
-        if not self._generate_dataset(target_root_dir):
+        if not self._generate_tf_dataset(target_root_dir):
             print('Error generating TensorFlow dataset.')
             return False
         print('Generated TensorFlow dataset.')

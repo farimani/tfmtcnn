@@ -26,7 +26,7 @@ from __future__ import print_function
 
 import tensorflow as tf
 
-num_keep_radio = 0.7
+num_keep_ratio = 0.7
 
 
 def class_loss_ohem(cls_prob, label):
@@ -45,7 +45,7 @@ def class_loss_ohem(cls_prob, label):
     ones = tf.ones_like(label_prob, dtype=tf.float32)
     valid_inds = tf.where(label < zeros, zeros, ones)
     num_valid = tf.reduce_sum(valid_inds)
-    keep_num = tf.cast(num_valid * num_keep_radio, dtype=tf.int32)
+    keep_num = tf.cast(num_valid * num_keep_ratio, dtype=tf.int32)
     # set 0 to invalid sample
     loss = loss * valid_inds
     loss, _ = tf.nn.top_k(loss, k=keep_num)

@@ -76,7 +76,8 @@ def parse_arguments(argv):
     parser.add_argument(
         '--base_number_of_images',
         type=int,
-        help='Input base number of images.',
+        help=f"Input base number of images. This is basically how many samples is one part. We will "
+        f"multiply this number by 3:1:1:2 for negatives, positives, partials and landmark samples respectively",
         default=default_base_number_of_images)
 
     parser.add_argument(
@@ -123,7 +124,6 @@ def main(args):
     else:
         # print('Error generating PNet dataset.')
         raise RuntimeError('Error generating PNet dataset.')
-
 
 
 if __name__ == '__main__':

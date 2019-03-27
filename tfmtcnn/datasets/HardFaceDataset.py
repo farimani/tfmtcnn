@@ -75,78 +75,76 @@ class HardFaceDataset(SimpleFaceDataset):
         total_images, img_idx = len(image_file_names), 0
         pt = mef.ProgressText(len(image_file_names))
 
-        for image_file_path, detected_box, ground_truth_box in \
-                zip(image_file_names, detected_boxes, ground_truth_boxes):
+        for i, image_file_path in enumerate(image_file_names):
+            dets = detected_boxes[i]
             img_idx += 1
-            ground_truth_box = np.array(ground_truth_box, dtype=np.float32).reshape(-1, 4)
 
-            if detected_box.shape[0] == 0:
+            if dets.shape[0] == 0:
                 pt.update(f"{img_idx} / {total_images}")
                 continue
 
-            detected_box = convert_to_square(detected_box)
-            detected_box[:, 0:4] = np.round(detected_box[:, 0:4])
+            gt_box = np.array(ground_truth_boxes[i], dtype=np.float32).reshape(-1, 4)
+            dets = convert_to_square(dets)
+            dets[:, 0:4] = np.round(dets[:, 0:4])
             current_image = cv2.imread(image_file_path)
             per_image_face_images = 0
 
-            for box in detected_box:
-                x_left, y_top, x_right, y_bottom, _ = box.astype(int)
+            for det in dets:
+                x_left, y_top, x_right, y_bottom, _ = det.astype(int)
                 width = x_right - x_left + 1
                 height = y_bottom - y_top + 1
 
                 if ((width < minimum_face_size) or (height < minimum_face_size)
                         or (x_left < 0) or (y_top < 0)
-                        or (x_right > (current_image.shape[1] - 1))
-                        or (y_bottom > (current_image.shape[0] - 1))):
+                        or (x_right >= current_image.shape[1])
+                        or (y_bottom >= current_image.shape[0])):
+                    # MEF: TODO: We pad these images at runtime and pass to RNet/ONet. Shouldn't we do the same here?
                     continue
 
-                current_iou = iou(box, ground_truth_box)
+                current_iou = iou(det, gt_box)
+                idx = np.argmax(current_iou)
+                max_iou = current_iou[idx]
+                if max_iou < DatasetFactory.part_iou():
+                    continue
+
                 cropped_image = current_image[y_top:y_bottom + 1, x_left:x_right + 1, :]
-                resized_image = cv2.resize(cropped_image, (target_face_size, target_face_size),
-                                           interpolation=cv2.INTER_LINEAR)
-                if np.max(current_iou) < DatasetFactory.negative_iou():
-                    continue
-                else:
-                    idx = np.argmax(current_iou)
-                    assigned_gt = ground_truth_box[idx]
-                    x1, y1, x2, y2 = assigned_gt
+                resized_image = mef.resize_image(cropped_image, target_face_size, target_face_size)
+                assigned_gt = gt_box[idx]
+                x1, y1, x2, y2 = assigned_gt
 
-                    offset_x1 = (x1 - x_left) / float(width)
-                    offset_y1 = (y1 - y_top) / float(height)
-                    offset_x2 = (x2 - x_right) / float(width)
-                    offset_y2 = (y2 - y_bottom) / float(height)
+                offset_x1 = (x1 - x_left) / width
+                offset_y1 = (y1 - y_top) / height
+                offset_x2 = (x2 - x_right) / width
+                offset_y2 = (y2 - y_bottom) / height
 
-                    if np.max(current_iou) >= DatasetFactory.positive_iou():
-                        file_path = os.path.join(positive_dir, f"hard-positive-{generated_positive_samples}.jpg")
-                        # MEf: wrong to use linesep here
-                        # positive_file.write(file_path + ' 1 %.2f %.2f %.2f %.2f' %
-                        #                     (offset_x1, offset_y1, offset_x2, offset_y2) + os.linesep)
-                        positive_file.write(f"{file_path} 1 {offset_x1:.2f} {offset_y1:.2f} "
-                                            f"{offset_x2:.2f} {offset_y2:.2f}\n")
-                        cv2.imwrite(file_path, resized_image)
-                        generated_positive_samples += 1
-                        per_image_face_images += 1
-
-                    elif np.max(current_iou) >= DatasetFactory.part_iou():
-                        file_path = os.path.join(part_dir, f"hard-part-{generated_part_samples}.jpg")
-                        # MEf: wrong to use linesep here
-                        # part_file.write(file_path + ' -1 %.2f %.2f %.2f %.2f' %
-                        #                 (offset_x1, offset_y1, offset_x2, offset_y2) + os.linesep)
-                        part_file.write(f"{file_path} 1 {offset_x1:.2f} {offset_y1:.2f} "
+                if max_iou >= DatasetFactory.positive_iou():
+                    file_path = os.path.join(positive_dir, f"hard-positive-{generated_positive_samples}.jpg")
+                    positive_file.write(f"{file_path} 1 {offset_x1:.2f} {offset_y1:.2f} "
                                         f"{offset_x2:.2f} {offset_y2:.2f}\n")
-                        cv2.imwrite(file_path, resized_image)
-                        generated_part_samples += 1
-                        per_image_face_images += 1
+                    cv2.imwrite(file_path, resized_image)
+                    generated_positive_samples += 1
+                    per_image_face_images += 1
 
-            needed_negative_images = int((1.0 * per_image_face_images *
-                                          datasets_constants.negative_ratio) /
-                                         (datasets_constants.positive_ratio +
-                                          datasets_constants.part_ratio))
+                else:
+                    assert max_iou >= DatasetFactory.part_iou()
+                    file_path = os.path.join(part_dir, f"hard-part-{generated_part_samples}.jpg")
+                    part_file.write(f"{file_path} 1 {offset_x1:.2f} {offset_y1:.2f} "
+                                    f"{offset_x2:.2f} {offset_y2:.2f}\n")
+                    cv2.imwrite(file_path, resized_image)
+                    generated_part_samples += 1
+                    per_image_face_images += 1
+
+            needed_negative_images = int((1.0 * per_image_face_images * datasets_constants.negative_parts) /
+                                         (datasets_constants.positive_parts + datasets_constants.partial_parts))
             needed_negative_images = max(1, needed_negative_images)
-
             current_negative_images = 0
-            for box in detected_box:
-                x_left, y_top, x_right, y_bottom, _ = box.astype(int)
+            for det in dets:
+                # MEF: TODO: Why not always add the false positives instead of fitting to a quota?
+                #
+                if current_negative_images >= needed_negative_images:
+                    break
+
+                x_left, y_top, x_right, y_bottom, _ = det.astype(int)
                 width = x_right - x_left + 1
                 height = y_bottom - y_top + 1
 
@@ -154,20 +152,14 @@ class HardFaceDataset(SimpleFaceDataset):
                         or (x_left < 0) or (y_top < 0)
                         or (x_right > (current_image.shape[1] - 1))
                         or (y_bottom > (current_image.shape[0] - 1))):
+                    # MEF: TODO: We pad these images at runtime and pass to RNet/ONet. Shouldn't we do the same here?
                     continue
 
-                current_iou = iou(box, ground_truth_box)
-                cropped_image = current_image[y_top:y_bottom +
-                                              1, x_left:x_right + 1, :]
-                resized_image = cv2.resize(
-                    cropped_image, (target_face_size, target_face_size),
-                    interpolation=cv2.INTER_LINEAR)
-
-                if np.max(current_iou) < DatasetFactory.negative_iou() and \
-                        current_negative_images < needed_negative_images:
+                max_iou = np.max(iou(det, gt_box))
+                if max_iou < DatasetFactory.negative_iou():
+                    cropped_image = current_image[y_top:y_bottom + 1, x_left:x_right + 1, :]
+                    resized_image = mef.resize_image(cropped_image, target_face_size, target_face_size)
                     file_path = os.path.join(negative_dir, f"hard-negative-{generated_negative_samples}.jpg")
-                    # MEF: wrong to use linesep here
-                    # negative_file.write(file_path + ' 0' + os.linesep)
                     negative_file.write(file_path + ' 0\n')
                     cv2.imwrite(file_path, resized_image)
                     generated_negative_samples += 1
@@ -184,8 +176,10 @@ class HardFaceDataset(SimpleFaceDataset):
 
     def generate_hard_samples(self, annotation_image_dir, annotation_file_name,
                               model_train_dir, network_name, minimum_face_size, target_root_dir):
-        status, dataset = self._read(annotation_image_dir, annotation_file_name)
-        if not status:
+        """ Creates a face detector from what we have so far, runs it over the set, and does hard example mining...
+        """
+        dataset = self._read(annotation_image_dir, annotation_file_name)
+        if dataset is None:
             return False
 
         test_data = InferenceBatch(dataset['images'])

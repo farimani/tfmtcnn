@@ -78,8 +78,8 @@ class ModelEvaluator(object):
         if len(detected_boxes) != number_of_images:
             return False
 
-        negative_thresh = datasets_constants.part_iou
         assert datasets_constants.part_iou <= datasets_constants.positive_iou
+        no_match_thresh = datasets_constants.part_iou
 
         n_pos = n_pos_sq = n_part = n_part_sq = n_labeled = n_dets = 0
         n_fp = n_fp_sq = 0  # false positives
@@ -123,10 +123,10 @@ class ModelEvaluator(object):
             #      FPR (FP/(FP + TN) where TN is true -ves). Instead we calculate and report FDR, which is the
             #      False Discovery Rate, and FDR = FP/(FP + TP). FDR is (1 - precision), where precision, or PPV,
             #      is PPV = TP/(TP + FP).
-            for i, det in enumerate(dets):
-                max_iou, max_iou_sq = np.max(iou(det, bboxes)), np.max(iou(dets_square[i], bboxes))
-                n_fp += 1 if max_iou <= negative_thresh else 0
-                n_fp_sq += 1 if max_iou_sq <= negative_thresh else 0
+            for j, det in enumerate(dets):
+                max_iou, max_iou_sq = np.max(iou(det, bboxes)), np.max(iou(dets_square[j], bboxes))
+                n_fp += 1 if max_iou < no_match_thresh else 0
+                n_fp_sq += 1 if max_iou_sq < no_match_thresh else 0
 
         if print_result:
             print(f"                       {'orig':>10s}  {'square':>10s}")

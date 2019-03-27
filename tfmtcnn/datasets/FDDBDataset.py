@@ -80,8 +80,7 @@ class FDDBDataset(object):
             return False
 
         extension = '.jpg'
-        images = []
-        bounding_boxes = []
+        images, bounding_boxes = [], []
         annotation_file = open(annotation_file_name, 'r')
 
         print(f"Reading FDDB dataset from {annotation_image_dir}...")
@@ -94,11 +93,10 @@ class FDDBDataset(object):
 
             image_path = image_path + extension
             image_path = os.path.join(annotation_image_dir, image_path)
-            image = cv2.imread(image_path)
-            if image is None:
-                continue
+            image_width, image_height = mef.get_image_size(image_path)
+            if image_width <= 0 or image_height <= 0:
+                print(f"WARNING: Could not parse image {image_path}. Skipping...")
 
-            image_height, image_width, image_channels = image.shape
             number_of_faces = int(annotation_file.readline().strip('\n'))
             one_image_boxes = []
             for face_index in range(number_of_faces):
@@ -131,8 +129,9 @@ class FDDBDataset(object):
                 ymax = self._filter_coordinate(max(y1, y2), image_height)
                 ymin = self._filter_coordinate(min(y1, y2), image_height)
 
-                width = xmax - xmin
-                height = ymax - ymin
+                xmin, ymin, xmax, ymax = int(xmin), int(ymin), int(xmax - 1), int(ymax - 1)
+                width = xmax - xmin + 1
+                height = ymax - ymin + 1
 
                 if max(width, height) >= FDDBDataset.minimum_face_size() and width > 0 and height > 0:
                     one_image_boxes.append([xmin, ymin, xmax, ymax])

@@ -36,7 +36,6 @@ from __future__ import division
 from __future__ import print_function
 
 import sys
-import os
 import re
 import argparse
 
@@ -45,9 +44,8 @@ import mef
 
 def prepare_dataset(bounding_box_file_name, landmark_file_name,
                     output_file_name):
-    if not os.path.isfile(bounding_box_file_name):
-        return False
-    if not os.path.isfile(landmark_file_name):
+    if not (mef.isfile(bounding_box_file_name) and
+            mef.isfile(landmark_file_name)):
         return False
 
     bounding_box_file = open(bounding_box_file_name, 'r')

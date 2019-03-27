@@ -32,15 +32,17 @@ class BBox(object):
 
         self.x = bbox[0]
         self.y = bbox[1]
-        self.w = bbox[2] - bbox[0]      # MEF: TODO: Check if we need to add one here?
-        self.h = bbox[3] - bbox[1]
+        self.w = bbox[2] - bbox[0] + 1
+        self.h = bbox[3] - bbox[1] + 1
 
     def expand(self, scale=0.05):
         bbox = [self.left, self.right, self.top, self.bottom]
-        bbox[0] -= int(self.w * scale)
-        bbox[1] += int(self.w * scale)
-        bbox[2] -= int(self.h * scale)
-        bbox[3] += int(self.h * scale)
+        x_delta = int(self.w * scale)
+        y_delta = int(self.h * scale)
+        bbox[0] -= x_delta
+        bbox[1] += x_delta
+        bbox[2] -= y_delta
+        bbox[3] += y_delta
         return BBox(bbox)
 
     def project(self, point):

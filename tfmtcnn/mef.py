@@ -8,7 +8,6 @@
 # Created by mehran on 11 / 06 / 18.
 # Copyright © 2018 Percipo Inc. All rights reserved.
 #
-#
 #######################################################################################
 
 import os
@@ -22,6 +21,7 @@ from subprocess import Popen, PIPE
 import imghdr
 import struct
 import hashlib
+import cv2
 
 
 # noinspection PyUnusedLocal
@@ -102,17 +102,17 @@ def expand_seconds_str(seconds):
 
 
 def rect_size(r):
-    """ Return w, h of the rectangle """
+    """ Return w, h of the rectangle. Note that our rectangle extents are inclusive. """
     return r[2]-r[0], r[3]-r[1]
 
 
 def rect_width(r):
-    """ Return width """
+    """ Return width. Note that our rectangle extents are inclusive. """
     return r[2]-r[0]
 
 
 def rect_height(r):
-    """ Return height """
+    """ Return height. Note that our rectangle extents are inclusive. """
     return r[3]-r[1]
 
 
@@ -201,7 +201,8 @@ def rect_flipped_vertical(r, width):
 
 
 def rect_contains_point(r, p):
-    return r[0] <= p[0] <= r[2] and r[1] <= p[1] <= r[3]
+    # Note that our rectangle extents are inclusive.
+    return r[0] <= p[0] < r[2] and r[1] <= p[1] < r[3]
 
 
 def rect_intersection(r1, r2):
@@ -231,6 +232,32 @@ def rect_iou(r1, r2):
 
     area_intersect = rect_area(r_intersect)
     return area_intersect / (rect_area(r1) + rect_area(r2) - area_intersect)
+
+
+def rect_hull(points):
+    """
+    Return the rectangular hull of the given points.
+
+    :param points: Array of x,y tuples/lists
+    :return: Min rectangle containing all points.
+    """
+    x1 = y1 = float('inf')
+    x2 = y2 = -float('inf')
+
+    for pt in points:
+        if pt[0] < x1:
+            x1 = pt[0]
+
+        if pt[1] < y1:
+            y1 = pt[1]
+
+        if pt[0] > x2:
+            x2 = pt[0]
+
+        if pt[1] > y2:
+            y2 = pt[1]
+
+    return [x1, y1, x2, y2]
 
 
 def dist_euclidean(v1, v2):
@@ -646,6 +673,19 @@ def standardize_image_fixed(x):
     return (x - 127.5) / 128
 
 
+def resize_image(img, to_width, to_height):
+    """
+    Scale the image with area averaging if shrinking and bicubic interpolation if enlarging.
+    :param img: numpy image
+    :param to_width:
+    :param to_height:
+    :return:
+    """
+    img_h, img_w, _ = img.shape
+    interp = cv2.INTER_AREA if (img_w * img_h) >= (to_width * to_height) else cv2.INTER_CUBIC
+    return cv2.resize(img, (to_width, to_height), interpolation=interp)
+
+
 def print_arguments(args, filename=None, print_header=True):
     """
     Print the arguments dictionary to a file, or stdout if filename is blank or None
@@ -813,6 +853,86 @@ def md5sum(fname):
     return hash_md5.hexdigest()
 
 
+def vectors_are_almost_parallel(v1, v2):
+    """ Parallel test """
+    epsilon = 1e-5
+
+    # MEF: Two equivalent tests, but i think the one with cross product below is fewer computations...
+    # dotprod = np.dot(v1, v2)
+    # magsq_product = np.dot(v1, v1) * np.dot(v2, v2)
+    # # Note: dot(v1, v2)^2 / magsq_product == cos(theta)^2
+    # return dotprod**2 >= (magsq_product * (1 - epsilon))
+
+    xproduct = np.cross(v1, v2)
+    magsq_product = np.dot(v1, v1) * np.dot(v2, v2)
+    # Note: dot(xproduct, xproduct) / magsq_product == sin(theta)^2
+    return np.dot(xproduct, xproduct) <= epsilon * magsq_product
+
+
+def angle_between_vectors(v1, v2, degrees=True):
+    # product = v1.x * v2.x + v1.y * v2.y
+    product = np.dot(v1, v2)
+
+    if vectors_are_almost_parallel(v1, v2):
+        # Result is 0 or PI q!a@
+        if product < 0:
+            return 180 if degrees else math.pi
+
+        return 0
+
+    epsilon = 1e-5
+    magnitude1 = np.linalg.norm(v1)
+    magnitude2 = np.linalg.norm(v2)
+    if magnitude1 == 0:
+        magnitude1 = epsilon
+    if magnitude2 == 0:
+        magnitude2 = 1e-5
+
+    cosangle = max(product / (magnitude1 * magnitude2), -1.0)   # acos of value < -1 is not defined.
+    angle = math.acos(cosangle)
+    return math.degrees(angle) if degrees else angle
+
+
+def angle_of_line(p1, p2, degrees=True):
+    """ Angle between the x axis and the line from p1 to p2, in radians or degrees.
+        Should be a little faster than using angle_between_vectors()
+    """
+    if p1[0] == p2[0]:
+        if p1[1] == p2[1]:
+            return 0
+
+        return 90 if p1[1] < p2[1] else -90
+
+    m = (p1[1] - p2[1]) / (p1[0] - p2[0])
+    angle = math.atan(m)
+    return math.degrees(angle) if degrees else angle
+
+
+def rotate_point(pt, theta, origin=(0, 0), degrees=True):
+    """ Rotatate a 2D point about the given origin """
+    x, y = pt[0] - origin[0], pt[1] - origin[1]
+    theta = math.radians(theta) if degrees else theta
+    cos_theta, sin_theta = math.cos(theta), math.sin(theta)
+    qx = origin[0] + cos_theta * x + sin_theta * y
+    qy = origin[1] + -sin_theta * x + cos_theta * y
+    return [qx, qy]
+
+
+def rotate_points(pts, theta, origin=(0, 0), degrees=True):
+    """ Rotatate an array of 2D points about the given origin
+        Input should be an array of 2D points where each row is a point with x,y.
+        Returns an array of corresponding rotated points.
+    """
+    xs, ys = pts[:, 0] - origin[0], pts[:, 1] - origin[1]
+    theta = math.radians(theta) if degrees else theta
+    cos_theta = math.cos(theta)
+    sin_theta = math.sin(theta)
+    qxs = origin[0] + cos_theta * xs + sin_theta * ys
+    qys = origin[1] + -sin_theta * xs + cos_theta * ys
+    # now zip them up and return an array of x,y points per row
+    return np.hstack((np.expand_dims(qxs, axis=1), np.expand_dims(qys, axis=1)))
+
+
 class ProgressText:
     def __init__(self, total, current=0, newline_when_done=True):
         self._total = 0
@@ -857,13 +977,13 @@ class ProgressText:
     def get_output_string(self):
         return self._output
 
-    def update_current_time(self, msg="", show=True):
+    def update_current_time(self, msg="", step=1, show=True):
         """
         Only update the current elapsed time and show the msg with new remaining time estimtate
         :return:
         """
         elapsed = time.time() - self._last_update
-        self._update_time_acc.blend(elapsed, 0.9999)
+        self._update_time_acc.blend(elapsed / step, 0.9999)
 
         if show:
             self.show(msg)
@@ -893,8 +1013,6 @@ class ProgressText:
         if self._current == self._total:
             if self._newline_when_done:
                 print("")
-            # else:
-            #     print("\r                                                   ")
 
     def _update_output_str(self):
         percent_done = self.percent_done()
@@ -943,5 +1061,4 @@ class AccBlend:
         self._acc += other._acc
         self._count_acc += other._count_acc
         return self
-
 
